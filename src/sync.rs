@@ -1,0 +1,445 @@
+//! The sync loop: `main()` and `sync_to_target()` from `main.py`.
+//!
+//! The phase structure is deliberately identical — token refresh, source fetch,
+//! change detection, per-target reconcile — because the behaviour operators see
+//! (how often the source is polled, when a target is retried, what a dry run
+//! prints) follows from it.
+
+use std::collections::{BTreeSet, HashMap};
+use std::time::{Duration, Instant};
+
+use crate::host::{self, ProxyHost};
+use crate::http::Session;
+use crate::npm::{self, ListError};
+use crate::settings::{self, Auth, Settings};
+use crate::stop::Stop;
+
+/// NPM tokens live 24 h; refresh at 12 h, as the Python app does.
+pub const AUTH_REFRESH_INTERVAL: Duration = Duration::from_secs(12 * 60 * 60);
+
+/// Exit code for a run stopped with Ctrl-C, matching the Python app.
+pub const EXIT_INTERRUPTED: u8 = 130;
+
+enum SyncError {
+    /// A `requests.RequestException` equivalent: the target is retried and the
+    /// token dropped.
+    Request(String),
+    /// Anything else (`except Exception`): reported, target retried.
+    Other(String),
+}
+
+pub struct Engine<'a> {
+    settings: &'a Settings,
+    period: i64,
+    dry_run: bool,
+    stop: Stop,
+    sessions: HashMap<String, Session>,
+    source_auth: Auth,
+    target_auth: Vec<Auth>,
+    /// Targets that still need a sync, keyed by URL like the Python set.
+    unsynced: BTreeSet<String>,
+    previous_source_hosts: Option<Vec<ProxyHost>>,
+    last_auth: Option<Instant>,
+    auth_refresh: Duration,
+}
+
+impl<'a> Engine<'a> {
+    pub fn new(
+        settings: &'a Settings,
+        period: i64,
+        dry_run: bool,
+        stop: Stop,
+    ) -> Result<Self, reqwest::Error> {
+        let mut sessions = HashMap::new();
+        sessions.insert(
+            settings.source.url.clone(),
+            Session::new(&settings.source.url)?,
+        );
+        for target in &settings.targets {
+            if !sessions.contains_key(&target.url) {
+                sessions.insert(target.url.clone(), Session::new(&target.url)?);
+            }
+        }
+
+        Ok(Self {
+            settings,
+            period,
+            dry_run,
+            stop,
+            sessions,
+            source_auth: settings::resolve_auth(
+                settings.source.auth_payload.as_ref(),
+                &settings.env,
+            ),
+            target_auth: settings
+                .targets
+                .iter()
+                .map(|target| settings::resolve_auth(target.auth_payload.as_ref(), &settings.env))
+                .collect(),
+            unsynced: settings.targets.iter().map(|t| t.url.clone()).collect(),
+            previous_source_hosts: None,
+            last_auth: None,
+            auth_refresh: AUTH_REFRESH_INTERVAL,
+        })
+    }
+
+    /// Test hook: shorten the 12 h token refresh interval.
+    pub fn with_auth_refresh(mut self, interval: Duration) -> Self {
+        self.auth_refresh = interval;
+        self
+    }
+
+    /// Runs until `period <= 0` (one cycle) or a stop is requested.
+    ///
+    /// Returns [`EXIT_INTERRUPTED`] when Ctrl-C ended the run, otherwise `0`.
+    pub fn run(&mut self) -> u8 {
+        let mode = if self.dry_run { " (DRY RUN MODE)" } else { "" };
+        log::info!(
+            "Starting Sync{mode}: {} targets configured.",
+            self.settings.targets.len()
+        );
+
+        let source_url = self.settings.source.url.clone();
+
+        loop {
+            if self.stop.is_stopped() {
+                return EXIT_INTERRUPTED;
+            }
+
+            // Phase 0: drop tokens periodically so they cannot expire mid-cycle.
+            self.refresh_tokens_if_due();
+
+            // Lazy authentication, source first.
+            if !self.session_has_token(&source_url) {
+                self.authenticate(&source_url, &self.source_auth.clone());
+            }
+            if !self.session_has_token(&source_url) {
+                log::error!("Source session not authenticated. Skipping cycle.");
+                if self.period <= 0 {
+                    break;
+                }
+                if self.sleep_period() {
+                    return EXIT_INTERRUPTED;
+                }
+                continue;
+            }
+
+            // Phase 1: fetch the source's proxy hosts.
+            let Some(source_hosts) = self.fetch_source_hosts() else {
+                if self.period <= 0 {
+                    break;
+                }
+                if self.sleep_period() {
+                    return EXIT_INTERRUPTED;
+                }
+                continue;
+            };
+
+            // Phase 2: detect whether the source moved.
+            let source_changed = self.previous_source_hosts.as_ref() != Some(&source_hosts);
+            if source_changed {
+                // A change on the source schedules every target again.
+                self.unsynced
+                    .extend(self.settings.targets.iter().map(|t| t.url.clone()));
+
+                if self.previous_source_hosts.is_none() {
+                    log::info!(
+                        "Initial sync: Source has {} proxy hosts.",
+                        source_hosts.len()
+                    );
+                } else {
+                    log::info!("Source change detected ({} hosts).", source_hosts.len());
+                }
+
+                // A dry run must not consume the change, or the next cycle would
+                // report "no changes" although nothing was written.
+                if !self.dry_run {
+                    self.previous_source_hosts = Some(source_hosts.clone());
+                }
+            }
+
+            // Phase 3: sync the targets that need it.
+            if self.period > 0 && !source_changed && self.unsynced.is_empty() {
+                log::info!("No changes in source and all targets are in sync.");
+                log::info!("Next sync in {} seconds.", self.period);
+                if self.sleep_period() {
+                    return EXIT_INTERRUPTED;
+                }
+                continue;
+            }
+
+            if self.period <= 0 {
+                log::info!("One-time sync mode. Proceeding with sync to targets.");
+            } else if !self.unsynced.is_empty() && !source_changed {
+                log::info!(
+                    "Retrying sync for {} unsynced target(s).",
+                    self.unsynced.len()
+                );
+            }
+
+            self.sync_targets(&source_hosts);
+
+            if self.stop.is_stopped() {
+                return EXIT_INTERRUPTED;
+            }
+
+            if self.period <= 0 {
+                log::info!("One-time sync completed. Exiting.");
+                break;
+            }
+
+            log::info!("Sync completed. Next sync in {} seconds.", self.period);
+            if self.sleep_period() {
+                return EXIT_INTERRUPTED;
+            }
+        }
+
+        0
+    }
+
+    fn refresh_tokens_if_due(&mut self) {
+        let due = match self.last_auth {
+            None => true,
+            Some(at) => at.elapsed() > self.auth_refresh,
+        };
+        if !due {
+            return;
+        }
+        // Python starts with last_auth_time = 0, so the very first cycle logs
+        // this line too; `None` reproduces that.
+        log::info!("Token refresh interval reached. Invalidating sessions.");
+        for session in self.sessions.values_mut() {
+            session.invalidate();
+        }
+        self.last_auth = Some(Instant::now());
+    }
+
+    fn fetch_source_hosts(&mut self) -> Option<Vec<ProxyHost>> {
+        let url = self.settings.source.url.clone();
+        let endpoint = format!("{url}/nginx/proxy-hosts");
+        log::info!("Fetching proxy hosts from {endpoint}");
+
+        let session = self.sessions.get_mut(&url)?;
+        match npm::list_proxy_hosts(session) {
+            Ok(hosts) => Some(hosts),
+            Err(ListError::Status(code)) => {
+                log::error!("Failed to fetch proxy hosts from source: {code}");
+                None
+            }
+            Err(ListError::Transport(message)) => {
+                log::error!("Connection error to source: {message}");
+                session.invalidate();
+                None
+            }
+            Err(ListError::Decode(message)) => {
+                log::error!("Failed to parse proxy hosts from source: {message}");
+                None
+            }
+        }
+    }
+
+    fn sync_targets(&mut self, source_hosts: &[ProxyHost]) {
+        let targets = self.settings.targets.clone();
+
+        for (index, target) in targets.iter().enumerate() {
+            if self.stop.is_stopped() {
+                return;
+            }
+
+            let url = target.url.clone();
+            if !self.unsynced.contains(&url) {
+                continue;
+            }
+
+            log::info!(
+                "--- Syncing to Target: {} ({url}) ---",
+                settings::target_name(target)
+            );
+
+            if !self.session_has_token(&url) {
+                let auth = self
+                    .target_auth
+                    .get(index)
+                    .cloned()
+                    .unwrap_or(Auth::Missing);
+                self.authenticate(&url, &auth);
+            }
+
+            if self.session_has_token(&url) {
+                let success = self.sync_to_target(source_hosts, &url);
+                // Dry runs never clear the flag: nothing was written, so the
+                // target is still out of date.
+                if success && !self.dry_run {
+                    self.unsynced.remove(&url);
+                }
+            } else {
+                log::warn!(
+                    "Skipping target {} - Authentication failed.",
+                    settings::target_name(target)
+                );
+            }
+        }
+    }
+
+    /// `sync_to_target()`: one target, one pass, with Python's error handling.
+    fn sync_to_target(&mut self, source_hosts: &[ProxyHost], target_url: &str) -> bool {
+        match self.sync_host_lists(source_hosts, target_url) {
+            Ok(()) => true,
+            Err(SyncError::Request(message)) => {
+                log::error!("Network error during sync to target {target_url}: {message}");
+                if let Some(session) = self.sessions.get_mut(target_url) {
+                    session.invalidate();
+                }
+                false
+            }
+            Err(SyncError::Other(message)) => {
+                log::error!("An error occurred during sync: {message}");
+                false
+            }
+        }
+    }
+    /// `sync_to_target()`'s body: read the target, delete what the source no
+    /// longer has, then create or update the rest.
+    fn sync_host_lists(
+        &mut self,
+        source_hosts: &[ProxyHost],
+        target_url: &str,
+    ) -> Result<(), SyncError> {
+        let target_hosts = {
+            let session = self.session_mut(target_url)?;
+            npm::list_proxy_hosts(session).map_err(|err| match err {
+                // Python calls raise_for_status(), so a non-2xx answer is a
+                // RequestException that invalidates the token.
+                ListError::Status(code) => SyncError::Request(format!("HTTP {code}")),
+                ListError::Transport(message) => SyncError::Request(message),
+                ListError::Decode(message) => SyncError::Other(message),
+            })?
+        };
+
+        log::info!(
+            "Found {} hosts on source and {} on target.",
+            source_hosts.len(),
+            target_hosts.len()
+        );
+
+        let (source_keys, source_by_key) = host::index_by_key(source_hosts);
+        let (target_keys, target_by_key) = host::index_by_key(&target_hosts);
+
+        // Phase 1: delete hosts whose domain set the source no longer has. Doing
+        // this first frees domain names that the create pass may reuse.
+        for key in &target_keys {
+            if source_by_key.contains_key(key) {
+                continue;
+            }
+            let target_host = target_by_key[key];
+
+            if self.dry_run {
+                log::info!(
+                    "[DRY RUN] Would delete host: {:?}",
+                    target_host.domain_names
+                );
+                continue;
+            }
+
+            log::info!(
+                "Host with domains {:?} no longer exists as a set in source. Deleting.",
+                target_host.domain_names
+            );
+
+            let Some(id) = target_host.id else {
+                log::error!(
+                    "Host with domains {:?} has no id on {target_url}; cannot delete it.",
+                    target_host.domain_names
+                );
+                continue;
+            };
+
+            let session = self.session_mut(target_url)?;
+            npm::delete_proxy_host(session, id, Some(target_host));
+        }
+
+        // Phase 2: create or update.
+        for key in &source_keys {
+            let source_host = source_by_key[key];
+
+            match target_by_key.get(key) {
+                Some(target_host) => {
+                    if host::should_update(source_host, target_host) {
+                        if self.dry_run {
+                            log::info!(
+                                "[DRY RUN] Would update host: {:?}",
+                                source_host.domain_names
+                            );
+                            continue;
+                        }
+
+                        let Some(id) = target_host.id else {
+                            log::error!(
+                                "Host with domains {:?} has no id on {target_url}; cannot update it.",
+                                source_host.domain_names
+                            );
+                            continue;
+                        };
+
+                        log::info!(
+                            "Updating host with domains {:?} (Target ID: {id})",
+                            source_host.domain_names
+                        );
+                        let session = self.session_mut(target_url)?;
+                        npm::update_proxy_host(session, id, source_host);
+                    } else {
+                        log::info!(
+                            "Host {:?} is already up to date on target.",
+                            source_host.domain_names
+                        );
+                    }
+                }
+                None => {
+                    if self.dry_run {
+                        log::info!(
+                            "[DRY RUN] Would create host: {:?}",
+                            source_host.domain_names
+                        );
+                        continue;
+                    }
+
+                    log::info!(
+                        "Creating host with domains {:?} on target.",
+                        source_host.domain_names
+                    );
+                    let session = self.session_mut(target_url)?;
+                    npm::add_proxy_host(session, source_host);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn session_mut(&mut self, url: &str) -> Result<&mut Session, SyncError> {
+        self.sessions
+            .get_mut(url)
+            .ok_or_else(|| SyncError::Other(format!("no session for {url}")))
+    }
+
+    fn session_has_token(&self, url: &str) -> bool {
+        self.sessions
+            .get(url)
+            .map(Session::has_token)
+            .unwrap_or(false)
+    }
+
+    fn authenticate(&mut self, url: &str, auth: &Auth) {
+        if let Some(session) = self.sessions.get_mut(url) {
+            session.authenticate(auth);
+        }
+    }
+
+    /// Sleeps one period; `true` when Ctrl-C cut it short.
+    fn sleep_period(&self) -> bool {
+        if self.period <= 0 {
+            return self.stop.is_stopped();
+        }
+        self.stop.sleep(Duration::from_secs(self.period as u64))
+    }
+}

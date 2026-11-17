@@ -1,0 +1,77 @@
+{
+  // Tasks for running nginxy without a debugger: Terminal > Run Task (or
+  // Ctrl-Shift-B for the default build).
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "cargo build",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["build"],
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "cargo build (release)",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["build", "--release"],
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "nginxy: dry run, one sync",
+      "detail": "Reads config.yaml/log.yaml/.env from the workspace folder; writes nothing to the targets.",
+      "type": "shell",
+      "command": "cargo",
+      "args": [
+        "run", "--",
+        "--config-dir", "${workspaceFolder}",
+        "--dry-run", "-p", "0", "-l", "DEBUG"
+      ],
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "nginxy: sync every 30 s",
+      "detail": "The normal operating mode; Ctrl-C in the terminal stops it.",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--", "--config-dir", "${workspaceFolder}", "-p", "30"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "nginxy: version",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run", "--", "--version", "--config-dir", "${workspaceFolder}"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "cargo test",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["test", "--all-targets"],
+      "group": "test",
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "cargo clippy",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["clippy", "--all-targets", "--", "-D", "warnings"],
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "cargo fmt",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["fmt", "--all"],
+      "problemMatcher": []
+    }
+  ]
+}

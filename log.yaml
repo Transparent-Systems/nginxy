@@ -1,0 +1,14 @@
+# nginxy — logging configuration and the version reported by --version.
+#
+# Same file, same keys and same defaults as nginx-sync. A missing or malformed
+# copy is not fatal: the defaults below apply.
+version: 0.1.0
+logging:
+  file_name: nginx_sync.log
+  folder: logs
+  max_bytes: 10485760
+  max_backup_count: 3
+  # log_level: DEBUG | INFO | WARNING | ERROR | CRITICAL
+  # NOTE: --log-level defaults to INFO and overrides this value; pass
+  # `-l NONE` to make the level below take effect (unchanged behaviour).
+  log_level: INFO

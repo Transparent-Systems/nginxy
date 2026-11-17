@@ -1,0 +1,20 @@
+# Build output
+/target/
+/dist/
+
+# User configuration and secrets (see config.example.yaml / log.example.yaml)
+.env
+/logs/
+
+# IDE — ignore the folder but keep the shared run/debug configuration
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/settings.json
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini

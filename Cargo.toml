@@ -1,0 +1,46 @@
+# nginxy — a Rust port of `nginx-sync`.
+#
+# Reads the same config.yaml / log.yaml / .env as the Python application and
+# performs the same NPM proxy-host synchronisation, as a single native binary.
+# The behavioural contract this crate is written against is PLAN.md (§2).
+[package]
+name = "nginxy"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+# Two binaries exist (nginxy and xtask), so `cargo run` needs to be told which
+# one is the application. Without this, `cargo run` fails with "could not
+# determine which binary to run" — including the Run button in an editor.
+default-run = "nginxy"
+license = "MIT"
+authors = ["John Zoetebier <john@zoetebier.net>"]
+description = "Synchronise Nginx Proxy Manager proxy hosts from a source instance to one or more targets"
+readme = "README.md"
+keywords = ["nginx", "proxy-manager", "sync", "cli"]
+categories = ["command-line-utilities"]
+
+[lib]
+name = "nginxy"
+path = "src/lib.rs"
+
+[[bin]]
+name = "nginxy"
+path = "src/main.rs"
+
+[dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+clap = { version = "4.5.61", features = ["derive"] }
+ctrlc = "3.5.2"
+dotenvy = "0.15.7"
+log = { version = "0.4.35", features = ["std"] }
+reqwest = { version = "0.13.3", default-features = false, features = ["blocking", "json", "rustls"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+serde_norway = "0.9.42"
+thiserror = "2.0.21"
+
+[dev-dependencies]
+assert_cmd = "2.2.2"
+mockito = "1.7.2"
+predicates = "3.1.4"
+tempfile = "3.27.0"

@@ -1,0 +1,6 @@
+[toolchain]
+# Stable only: the release workflows build with whatever stable is current, and
+# rust-version in Cargo.toml (1.75) is the real floor. Pinning a channel here
+# keeps every machine on the same compiler for reproducible `cargo fmt` output.
+channel = "stable"
+components = ["rustfmt", "clippy"]

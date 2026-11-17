@@ -1,0 +1,77 @@
+{
+  // Run/debug configurations for nginxy.
+  //
+  // Every configuration passes --config-dir explicitly so that the folder being
+  // read is visible here rather than inferred. Without a debugger extension,
+  // use the tasks in tasks.json (Ctrl-Shift-B / Terminal > Run Task).
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Requires the CodeLLDB extension (vadimcn.vscode-lldb). Linux and macOS.
+      "name": "nginxy: one dry-run sync (F5)",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": ["build", "--bin=nginxy"],
+        "filter": { "name": "nginxy", "kind": "bin" }
+      },
+      "args": ["--config-dir", "${workspaceFolder}", "--dry-run", "-p", "0", "-l", "DEBUG"],
+      "cwd": "${workspaceFolder}",
+      "env": { "RUST_BACKTRACE": "1" },
+      "terminal": "integrated"
+    },
+    {
+      "name": "nginxy: sync every 30 s",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": ["build", "--bin=nginxy"],
+        "filter": { "name": "nginxy", "kind": "bin" }
+      },
+      "args": ["--config-dir", "${workspaceFolder}", "-p", "30"],
+      "cwd": "${workspaceFolder}",
+      "env": { "RUST_BACKTRACE": "1" },
+      "terminal": "integrated"
+    },
+    {
+      // Requires the Microsoft C/C++ extension; the default debugger on Windows.
+      "name": "nginxy: one dry-run sync (Windows)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}\\target\\debug\\nginxy.exe",
+      "args": ["--config-dir", "${workspaceFolder}", "--dry-run", "-p", "0", "-l", "DEBUG"],
+      "cwd": "${workspaceFolder}",
+      "env": { "RUST_BACKTRACE": "1" },
+      "console": "integratedTerminal",
+      "preLaunchTask": "cargo build"
+    },
+    {
+      // gdb alternative for Linux without CodeLLDB (C/C++ extension, MIMode gdb).
+      "name": "nginxy: gdb (one dry-run sync)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/debug/nginxy",
+      "args": ["--config-dir", "${workspaceFolder}", "--dry-run", "-p", "0", "-l", "DEBUG"],
+      "cwd": "${workspaceFolder}",
+      "MIMode": "gdb",
+      "miDebuggerPath": "/usr/bin/gdb",
+      "env": { "RUST_BACKTRACE": "1" },
+      "externalConsole": false,
+      "preLaunchTask": "cargo build"
+    },
+    {
+      // Debugging the release-notes task instead of the sync loop.
+      "name": "xtask: release-notes",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": ["build", "--bin=xtask"],
+        "filter": { "name": "xtask", "kind": "bin" }
+      },
+      "args": ["release-notes"],
+      "cwd": "${workspaceFolder}",
+      "env": { "RUST_BACKTRACE": "1" },
+      "terminal": "integrated"
+    }
+  ]
+}

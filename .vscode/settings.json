@@ -1,0 +1,14 @@
+{
+  // Keep the editor's diagnostics identical to CI: clippy on save, all targets.
+  "rust-analyzer.check.command": "clippy",
+  "rust-analyzer.check.allTargets": true,
+  "rust-analyzer.cargo.allTargets": true,
+  "[rust]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "rust-lang.rust-analyzer"
+  },
+  // target/ is large and not interesting in the explorer.
+  "files.watcherExclude": {
+    "**/target/**": true
+  }
+}
