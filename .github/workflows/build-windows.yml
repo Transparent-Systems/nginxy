@@ -22,6 +22,20 @@ jobs:
           cargo build --release --locked
           New-Item -ItemType Directory -Path dist -Force | Out-Null
           Copy-Item target\release\nginxy.exe dist\nginxy.exe
+      # Windows ships without the Visual C++ Redistributable, so an exe that
+      # imports VCRUNTIME140.dll dies in the loader on a clean machine: no
+      # window, no output, nothing. That is what the 0.1.0 asset did; the
+      # static CRT is configured in .cargo/config.toml.
+      - name: Check the exe needs no runtime DLL
+        shell: pwsh
+        run: |
+          $bytes = [System.IO.File]::ReadAllBytes("$PWD\dist\nginxy.exe")
+          $image = [System.Text.Encoding]::ASCII.GetString($bytes)
+          foreach ($dll in 'VCRUNTIME140.dll', 'MSVCP140.dll') {
+            if ($image.Contains($dll)) {
+              throw "the exe imports $dll: it would not start without the VC++ Redistributable"
+            }
+          }
       # Prove the binary really starts. --version and --help need no
       # configuration; the run below uses --config-dir, so CI never relies on a
       # config.yaml sitting next to the exe.

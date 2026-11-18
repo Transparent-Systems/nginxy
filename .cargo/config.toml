@@ -4,3 +4,12 @@
 # from the Python application.
 [alias]
 xtask = "run --quiet --bin xtask --"
+
+# The MSVC target links the C runtime *dynamically* by default, which puts an
+# import of VCRUNTIME140.dll in the exe. That DLL belongs to the Visual C++
+# Redistributable, not to Windows: on a machine without it the loader stops
+# before main(), so the program produces no output at all and appears to do
+# nothing. Linking the CRT statically removes the import, which is what "one
+# unsigned .exe, no installation" in the release notes promises.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
