@@ -4,7 +4,7 @@
 
 - `.env` now goes through the same UTF-8 and BOM handling as `config.yaml` and
   `log.yaml`. A `.env` written by Notepad (UTF-8 with BOM) used to hide its first
-  key, so startup stopped with `No credentials configured for: …` even though
+  key, so startup stopped with `No credentials configured for: ...` even though
   the file was right there.
 - The BOM and invalid-UTF-8 cases are unit-tested for all three files.
 - No other behaviour changes.
@@ -36,7 +36,7 @@ window, no console output, not even `--version`, and no log file. The exe is now
 linked with the static CRT and imports only DLLs that every Windows 10/11
 installation has.
 
-- `nginxy.exe` no longer depends on the Visual C++ Redistributable — nothing has
+- `nginxy.exe` no longer depends on the Visual C++ Redistributable - nothing has
   to be installed for it to start.
 - The build now fails if that import ever reappears, so a release cannot ship an
   exe that is dead on a clean machine.
@@ -68,10 +68,10 @@ target in step with the source.
 - New: `${VAR}` placeholders in `config.yaml` and `log.yaml`, in the style of
   docker-compose (`${VAR}`, `${VAR:-default}`, `${VAR:?message}`, `$$`). Values
   come from the process environment, then `.env`, so the configuration files can
-  be committed without addresses or credentials. Only values are expanded —
-  comments are ignored — and an unset `${VAR}` stops startup naming the file and
-  the setting (`config.yaml: source.url: variable … is not set`).
-- The credential variables are `NPM_SOURCE_IDENTITY` and `NPM_SOURCE_SECRET` —
+  be committed without addresses or credentials. Only values are expanded -
+  comments are ignored - and an unset `${VAR}` stops startup naming the file and
+  the setting (`config.yaml: source.url: variable ... is not set`).
+- The credential variables are `NPM_SOURCE_IDENTITY` and `NPM_SOURCE_SECRET` -
   the only names accepted, so one spelling is used throughout. A `.env` using
   the shorter `NPM_IDENTITY`/`NPM_SECRET` names must rename its two keys:
 
@@ -79,10 +79,10 @@ target in step with the source.
   sed -i 's/^NPM_IDENTITY=/NPM_SOURCE_IDENTITY=/; s/^NPM_SECRET=/NPM_SOURCE_SECRET=/' .env
   ```
 
-  Without that, startup stops with `No credentials configured for: source, …`
+  Without that, startup stops with `No credentials configured for: source, ...`
   naming the variables it expects.
 - Logging no longer aborts the process when stderr is a closed pipe
-  (`nginxy … | head` used to exit 101).
+  (`nginxy ... | head` used to exit 101).
 - A host update is now decided by comparing the **payload** that would be sent,
   not ten hand-picked fields. `locations` (custom paths), `hsts_enabled`,
   `hsts_subdomains` and `trust_forwarded_proto` therefore propagate, and a field
@@ -103,6 +103,6 @@ target in step with the source.
 - A target whose create, update or delete call failed is no longer counted as
   synchronised. The pass reports the failed operations, the target stays in the
   retry list, and the next cycle tries again (log: `1 operation(s) failed on
-  target …; it stays in the retry list`). Previously such a target was only
+  target ...; it stays in the retry list`). Previously such a target was only
   retried after the next change on the source, so a failed write could stay
   unnoticed until someone read the log.
