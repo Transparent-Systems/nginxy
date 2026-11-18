@@ -47,15 +47,16 @@ fn version_works_without_any_configuration() {
 }
 
 #[test]
-fn version_is_read_from_log_yaml() {
+fn version_is_the_binary_version_not_the_config() {
     let dir = tempfile::tempdir().expect("temp dir");
+    // A stale marker in the group must not change what --version reports.
     write(dir.path(), "log.yaml", "version: 1.1.0\n");
     nginxy()
         .args(["--version", "--config-dir"])
         .arg(dir.path())
         .assert()
         .success()
-        .stdout("nginxy 1.1.0\n");
+        .stdout(format!("nginxy {}\n", env!("CARGO_PKG_VERSION")));
 }
 
 #[test]

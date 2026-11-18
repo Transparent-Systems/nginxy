@@ -55,7 +55,7 @@ Command line arguments override properties in `config.yaml`.
 | `-l`, `--log-level <LEVEL>` | `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL`; overrides `log_level` from `log.yaml` |
 | `--dry-run` | Report what would change; the target servers are left untouched |
 | `--config-dir <PATH>` | Folder holding `config.yaml`, `log.yaml` and `.env` (default: the folder of the binary) |
-| `--version` | Print the version recorded in `log.yaml` and exit |
+| `--version` | Print the running binary's version and exit |
 
 Without `-l`, the `log_level` from `log.yaml` applies. There is no `NONE`
 value: the Python app needed one because its flag carried an `INFO` default,
@@ -86,11 +86,11 @@ NPM_SOURCE_IDENTITY=your_identity
 NPM_SOURCE_SECRET=your_secret
 ```
 
-`log.yaml` - log file location, rotation and the version reported by
-`--version`:
+`log.yaml` - log file location, rotation and the version marker used by the
+release tooling:
 
 ```yaml
-version: 0.1.3
+version: 0.1.4
 logging:
   file_name: nginxy.log
   folder: logs

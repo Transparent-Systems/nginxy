@@ -48,7 +48,7 @@ a refactor.
 | `-l`, `--log-level <LEVEL>` | `DEBUG\|INFO\|WARNING\|ERROR\|CRITICAL` | unset -> `log.yaml` | An explicit value overrides `log_level`; there is no `NONE` value (Section 2.6) |
 | `--dry-run` | flag | off | No `POST`/`PUT`/`DELETE`; the source-change marker is not consumed |
 | `--config-dir <PATH>` | path | binary's folder | Always wins over the folder next to the binary |
-| `--version` | flag | - | Must work with **no** configuration present |
+| `--version` | flag | - | Must work with **no** configuration present; prints the binary's own version, never the config |
 | `-h`, `--help` | flag | - | Exit 0 |
 
 Exit codes: `0` success - `2` unusable configuration, credentials or arguments -
@@ -262,12 +262,12 @@ three on every push.
 
 | Suite | Tests | What it pins down |
 | --- | --- | --- |
-| `src/**` unit tests | 54 | Payload filtering and field classification, domain keys, record formatting, rotation, placeholder grammar, version fallbacks, level parsing |
+| `src/**` unit tests | 55 | Payload filtering and field classification, domain keys, record formatting, rotation, placeholder grammar, version fallbacks, level parsing |
 | `src/bin/xtask.rs` | 3 | Section extraction, tag/version mismatch, missing section |
 | `tests/settings.rs` | 19 | A deployed configuration loads, BOM, missing config, absolute log folder, auth precedence, `.env`, placeholders, missing-credential list |
 | `tests/npm_api.rs` | 12 | Verbs, paths, bearer header, payload shape, delete-before-create, dry-run silence |
 | `tests/cli.rs` | 14 | `--version`/`--help` without config, exit 2 cases, log written into `--config-dir`, Ctrl-C exits 130 |
-| **total** | **102** | |
+| **total** | **103** | |
 
 Release builds are exercised by the same smoke test CI runs: `--version`,
 `--help`, then a real one-shot run with `--config-dir` against port 9 (which
@@ -359,10 +359,13 @@ the README says so.
 
 ### 8.5 Versioning
 
-`log.yaml`'s `version:` is the user-visible version, so `--version` and the
-release notes cannot disagree. Because that file is user configuration, the
-precedence is: `log.yaml` in the config folder -> `NGINXY_BUILD_VERSION` embedded
-at build time -> `CARGO_PKG_VERSION` -> `unknown`.
+`--version` always reports the version of the running binary: `NGINXY_BUILD_VERSION`
+if a build step set it, else `CARGO_PKG_VERSION` from `Cargo.toml`, else `unknown`.
+That is what lets an operator confirm which executable is installed.
+
+`log.yaml`'s `version:` is a separate marker for the release tooling and for a
+deployment that wants to record which configuration it runs; it never changes what
+`--version` prints.
 
 `cargo xtask release-notes --tag <tag>` exits 0 on success, 1 when the section is
 missing and 2 when the tag and `log.yaml` disagree, so a mistyped tag cannot

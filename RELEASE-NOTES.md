@@ -1,5 +1,17 @@
 # Release Notes nginxy
 
+## 0.1.4 - `--version` reports the binary's own version
+
+- `--version` now always prints the version of the binary that is running (the
+  crate version from `Cargo.toml`, overridable at build time), so it answers
+  "which executable did I install?".
+- It no longer reads the `version:` key from the folder's `log.yaml`. That key
+  stays as the marker the release tooling anchors on (`cargo xtask
+  release-notes`) and a deployment can keep it as its own record, but a stale
+  `log.yaml` can no longer make a new binary report an old version.
+- No configuration change is needed: the binary's version is now authoritative,
+  and `log.yaml`'s `version:` is only informational.
+
 ## 0.1.3 - A `.env` saved with a BOM is read
 
 - `.env` now goes through the same UTF-8 and BOM handling as `config.yaml` and

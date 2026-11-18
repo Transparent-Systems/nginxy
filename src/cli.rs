@@ -68,7 +68,7 @@ pub struct Args {
     )]
     pub config_dir: Option<PathBuf>,
 
-    #[arg(long, help = "Show the version recorded in log.yaml and exit")]
+    #[arg(long, help = "Show the version of this binary and exit")]
     pub version: bool,
 }
 
@@ -97,10 +97,11 @@ where
 
     let (dir, used_fallback) = settings::resolve_dir(args.config_dir.as_deref());
 
-    // --version must work without any configuration: it is what a service
-    // manager or an upgrade script calls to see what it is about to run.
+    // --version must work without any configuration and always reports the
+    // binary's own version: it tells an operator which executable is installed,
+    // not what a log.yaml in some folder happens to declare.
     if args.version {
-        println!("nginxy {}", version::read(&dir));
+        println!("nginxy {}", version::binary());
         return ExitCode::SUCCESS;
     }
 

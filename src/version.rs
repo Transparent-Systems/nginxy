@@ -1,10 +1,10 @@
 //! Version reporting for `--version`.
 //!
-//! `log.yaml` is the file that already records the version, so it stays the
-//! first source of truth - that is what makes `--version` agree with the
-//! release notes. Because `log.yaml` is *user* configuration, a binary that
-//! ships without one must still answer, which is what the compile-time
-//! fallbacks are for.
+//! `--version` always reports the version of the *binary that is running*, so
+//! it answers "which build did I install?" without being influenced by the
+//! configuration in the folder. The `version:` key in `log.yaml` is a separate
+//! marker that the release tooling anchors on (`cargo xtask release-notes`);
+//! it is deliberately not what `--version` prints.
 
 use std::path::Path;
 
@@ -16,7 +16,7 @@ use crate::settings::read_text;
 /// File that carries the `version:` key.
 pub const VERSION_FILE: &str = "log.yaml";
 
-/// Shown when nothing at all can be determined.
+/// Shown when the built binary carries no version at all.
 pub const FALLBACK_VERSION: &str = "unknown";
 
 #[derive(Deserialize)]
@@ -25,32 +25,26 @@ struct VersionFile {
     version: Option<Value>,
 }
 
-/// Returns the version for `--version`.
-///
-/// Order: `version:` in `<dir>/log.yaml`, then the version baked in at build
-/// time (`NGINXY_BUILD_VERSION`), then this crate's own version.
-pub fn read(dir: &Path) -> String {
-    if let Some(version) = from_log_yaml(&dir.join(VERSION_FILE)) {
-        return version;
-    }
-
-    // `build.rs` is free to export NGINXY_BUILD_VERSION; without it the crate
-    // version is the honest answer.
-    let build = option_env!("NGINXY_BUILD_VERSION")
+/// The version baked into this binary: `NGINXY_BUILD_VERSION` if a build step
+/// set it, else the crate version from `Cargo.toml`. Always what `--version`
+/// prints.
+pub fn binary() -> String {
+    let version = option_env!("NGINXY_BUILD_VERSION")
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_owned)
-        .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
+        .unwrap_or(env!("CARGO_PKG_VERSION").to_string());
 
-    if build.is_empty() {
+    if version.is_empty() {
         FALLBACK_VERSION.to_string()
     } else {
-        build
+        version
     }
 }
 
-fn from_log_yaml(path: &Path) -> Option<String> {
-    let text = read_text(path).ok()?;
+/// Reads the `version:` key from `<dir>/log.yaml`, if the file carries one.
+pub fn from_log_yaml(dir: &Path) -> Option<String> {
+    let text = read_text(&dir.join(VERSION_FILE)).ok()?;
     let parsed: VersionFile = serde_norway::from_str(&text).ok()?;
     // An unquoted `version: 1.1` parses as a float, so stringify what came back.
     match parsed.version? {
@@ -60,6 +54,12 @@ fn from_log_yaml(path: &Path) -> Option<String> {
             (!rendered.is_empty()).then_some(rendered)
         }
     }
+}
+
+/// For the release tooling (`cargo xtask release-notes`): the `log.yaml`
+/// marker if present, else the binary's own version. Not used by `--version`.
+pub fn read(dir: &Path) -> String {
+    from_log_yaml(dir).unwrap_or_else(binary)
 }
 
 #[cfg(test)]
@@ -103,5 +103,10 @@ mod tests {
     fn ignores_broken_yaml() {
         let dir = temp_dir(&[("log.yaml", "version: [unclosed\n")]);
         assert_eq!(read(dir.path()), env!("CARGO_PKG_VERSION"));
+    }
+
+    #[test]
+    fn binary_is_the_crate_version() {
+        assert_eq!(binary(), env!("CARGO_PKG_VERSION"));
     }
 }
