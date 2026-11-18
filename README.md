@@ -15,7 +15,7 @@ statically linked, so no `GLIBC_2.xx` surprises.
    [Releases](https://github.com/Transparent-Systems/nginxy/releases) page, next
    to `nginxy.sha256` / `nginxy.exe.sha256`.
 
-2. **Verify and make it executable** (Linux — the executable bit is not kept by
+2. **Verify and make it executable** (Linux - the executable bit is not kept by
    the download):
 
     ```bash
@@ -29,7 +29,7 @@ statically linked, so no `GLIBC_2.xx` surprises.
     Get-FileHash .\nginxy.exe -Algorithm SHA256
     ```
 
-3. **Put the three configuration files next to it** — they are read from the
+3. **Put the three configuration files next to it** - they are read from the
    binary's own folder, not from the current directory:
 
     ```bash
@@ -63,7 +63,7 @@ which `nginxy` does not.
 
 ## Configuration
 
-`config.yaml` — source and targets:
+`config.yaml` - source and targets:
 
 ```yaml
 source:
@@ -79,14 +79,14 @@ targets:
       secret: "change-me"
 ```
 
-`.env` — credentials used by every endpoint without its own `auth_payload`:
+`.env` - credentials used by every endpoint without its own `auth_payload`:
 
 ```
 NPM_SOURCE_IDENTITY=your_identity
 NPM_SOURCE_SECRET=your_secret
 ```
 
-`log.yaml` — log file location, rotation and the version reported by
+`log.yaml` - log file location, rotation and the version reported by
 `--version`:
 
 ```yaml
@@ -105,7 +105,7 @@ Logs go to `<config-dir>/logs/nginxy.log` and to stderr, in the line format
 ### Variables in the configuration files
 
 `config.yaml` and `log.yaml` may contain `${VAR}` placeholders, so the committed
-files carry no addresses or secrets at all — the same pattern `docker-compose`
+files carry no addresses or secrets at all - the same pattern `docker-compose`
 uses with its `.env`:
 
 ```yaml
@@ -137,12 +137,12 @@ NPM_TARGET_SECRET=change-me
 Rules worth knowing:
 
 - Values are read from the **process environment first**, then from `.env` in
-  the configuration folder — the same order and the same map the credentials use.
+  the configuration folder - the same order and the same map the credentials use.
   A service manager that exports variables therefore needs no `.env` at all.
 - Expansion is a single pass over the file text: a value that itself contains
   `$` is inserted as-is and never re-expanded.
 - An unresolvable placeholder in `config.yaml` stops startup with the file, line
-  and the value that needed it (`config.yaml: source.url: variable NPM_SOURCE_URL is not set …`).
+  and the value that needed it (`config.yaml: source.url: variable NPM_SOURCE_URL is not set ...`).
   In `log.yaml` it is treated like any other logging typo: the defaults apply.
 - Only **values** are expanded, never comments: a documentation block may show
   `${VAR}` without asking for a value.
@@ -166,7 +166,7 @@ another instance:
 | Never sent | Why |
 | --- | --- |
 | `id`, `owner_user_id`, `created_on`, `modified_on`, `user` | read-only |
-| `certificate_id`, `access_list_id` | identifiers inside *one* NPM database — the same number means a different certificate or access list on another instance |
+| `certificate_id`, `access_list_id` | identifiers inside *one* NPM database - the same number means a different certificate or access list on another instance |
 | `meta` | runtime status (`nginx_online`, `nginx_err`), not configuration |
 
 Everything else is configuration and is propagated, including `locations`
@@ -177,8 +177,8 @@ nor deliberately excluded.
 
 Two consequences worth knowing:
 
-- `modified_on` is not part of the payload, so touching a host on the source —
-  renaming it, saving it unchanged — no longer re-syncs every target.
+- `modified_on` is not part of the payload, so touching a host on the source -
+  renaming it, saving it unchanged - no longer re-syncs every target.
 - When a `certificate_id` or `access_list_id` differs between source and target,
   the log says so instead of silently ignoring it; those values are per-instance
   and are never copied.
@@ -194,7 +194,7 @@ waiting for the source to change.
 
 `nginxy` looks for `config.yaml` in the folder of the **executable**, so a plain
 `cargo run` would search `target/debug/`. When that folder has no `config.yaml`,
-it falls back to the current directory and says so in the log — which is what
+it falls back to the current directory and says so in the log - which is what
 makes the editor's Run button, F5 and `cargo run` work from the repository root:
 
 ```bash
@@ -219,16 +219,16 @@ cargo run -- --config-dir ../nginxy --dry-run -p 0
 ### In VS Code
 
 `.vscode/` carries three shared files, so everyone gets the same setup. Open the
-**`nginxy` folder itself** as the workspace (`File → Open Folder…`); VS Code only
+**`nginxy` folder itself** as the workspace (`File -> Open Folder...`); VS Code only
 reads `.vscode/*.json` from the folder currently open.
 
 | File | What it gives you |
 | --- | --- |
 | `tasks.json` | Tasks: **nginxy: dry run, one sync**, **nginxy: sync every 30 s**, **nginxy: version**, build/test/clippy/fmt |
-| `launch.json` | F5 → *nginxy: one dry-run sync (F5)* with breakpoints (CodeLLDB on Linux/macOS, `cppvsdbg` on Windows, plain `gdb` as a fallback) |
+| `launch.json` | F5 -> *nginxy: one dry-run sync (F5)* with breakpoints (CodeLLDB on Linux/macOS, `cppvsdbg` on Windows, plain `gdb` as a fallback) |
 | `settings.json` | `cargo clippy` as the on-save check, identical to CI |
 
-Where "Run Task" lives — three equivalent routes, since the menu entry is not
+Where "Run Task" lives - three equivalent routes, since the menu entry is not
 always visible (it is under the **Terminal** menu, which is hidden when the menu
 bar is collapsed):
 
@@ -236,7 +236,7 @@ bar is collapsed):
 | --- | --- |
 | Command Palette | `Ctrl-Shift-P`, type `Run Task`, choose **Tasks: Run Task**, then the task name |
 | Keyboard | `Ctrl-Shift-B` runs the default *build* task (`cargo build`) directly |
-| Menu bar | `Terminal → Run Task…` (press `Alt` first if the menu bar is hidden) |
+| Menu bar | `Terminal -> Run Task...` (press `Alt` first if the menu bar is hidden) |
 
 If the list is empty, run **Developer: Reload Window** once: VS Code only reads
 `tasks.json` when the folder is opened.
@@ -244,7 +244,7 @@ If the list is empty, run **Developer: Reload Window** once: VS Code only reads
 Breakpoints: set one in `src/sync.rs` (for example in `sync_host_lists`) and
 press F5; the debugger stops before the first HTTP call.
 
-`RUST_BACKTRACE=1 cargo run -- -p 0` is **not** a debugger command — it is how
+`RUST_BACKTRACE=1 cargo run -- -p 0` is **not** a debugger command - it is how
 you get a backtrace from a panic when running normally in a terminal. The
 debugger equivalent is the `"env": { "RUST_BACKTRACE": "1" }` entry that every
 configuration in `launch.json` already sets.
@@ -282,7 +282,7 @@ cargo build --release --target x86_64-unknown-linux-musl
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).
 
 ## Why nginxy?
 
@@ -299,4 +299,4 @@ all targets.
 
 ### Author
 
-John Zoetebier — [aip.transparent.co.nz](http://aip.transparent.co.nz)
+John Zoetebier - [aip.transparent.co.nz](http://aip.transparent.co.nz)

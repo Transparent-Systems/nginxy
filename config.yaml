@@ -1,4 +1,4 @@
-# nginxy — configuration.
+# nginxy - configuration.
 #
 # Put this file, log.yaml and .env next to the nginxy binary, or name this
 # folder with --config-dir <PATH>.
@@ -8,7 +8,7 @@
 # a literal $. Placeholders are expanded in values only, so this comment block
 # is never touched. See "Variables in the configuration files" in README.md.
 #
-# `source` takes `url:` and optionally `auth_payload:` — it has no `name:`.
+# `source` takes `url:` and optionally `auth_payload:` - it has no `name:`.
 
 source:
   url: "${NPM_SOURCE_URL}"
