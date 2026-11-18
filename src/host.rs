@@ -4,7 +4,7 @@
 //! The classification is a **deny-list**, not a whitelist. Everything NPM
 //! returns is treated as configuration to be propagated, except the two
 //! explicit sets below. That way a field added by a future NPM version is
-//! compared and forwarded automatically instead of being silently dropped —
+//! compared and forwarded automatically instead of being silently dropped -
 //! `every_field_is_classified` in the tests fails if a field ever appears that
 //! is neither propagated nor deliberately excluded.
 
@@ -81,7 +81,7 @@ impl ProxyHost {
         Value::Object(map)
     }
 
-    /// `tuple(sorted(host['domain_names']))` — order-insensitive identity.
+    /// `tuple(sorted(host['domain_names']))` - order-insensitive identity.
     pub fn domain_key(&self) -> Vec<String> {
         let mut key = self.domain_names.clone();
         key.sort();
@@ -116,7 +116,7 @@ pub fn not_synchronised_differences(source: &ProxyHost, target: &ProxyHost) -> V
 /// A stable view of a host set, used to decide whether the source moved.
 ///
 /// Sorted by domain key and reduced to the payload, so read-only fields
-/// (`modified_on`, `id`, …), per-instance fields (`certificate_id`, `meta`) and
+/// (`modified_on`, `id`, ...), per-instance fields (`certificate_id`, `meta`) and
 /// the order the API happens to return hosts in cannot look like a change.
 /// Without this, saving a host on the source without editing anything would mark
 /// every target unsynced again.
@@ -299,7 +299,7 @@ mod tests {
             target.rest.insert(key.clone(), replacement);
             assert!(
                 should_update(&source, &target),
-                "{key} is neither propagated nor excluded — classify it in NOT_SENT"
+                "{key} is neither propagated nor excluded - classify it in NOT_SENT"
             );
         }
     }
@@ -348,7 +348,7 @@ mod tests {
     #[test]
     fn configuration_ignores_read_only_and_per_instance_fields() {
         // What the live dry run showed: modified_on differs on 10 of 11 hosts,
-        // id and created_on on 9 — none of that is a configuration change.
+        // id and created_on on 9 - none of that is a configuration change.
         let source = sample();
         let mut other_instance = sample();
         other_instance.id = Some(42);

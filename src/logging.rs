@@ -134,8 +134,8 @@ impl RotatingFile {
 
 /// Writes one line to stderr without panicking.
 ///
-/// `eprintln!` panics when the write fails — which is what happens when the
-/// output is piped into something that exits early (`nginxy … | head`). Losing
+/// `eprintln!` panics when the write fails - which is what happens when the
+/// output is piped into something that exits early (`nginxy ... | head`). Losing
 /// a console line is not worth aborting a sync.
 fn write_console(line: &str) {
     let mut stderr = std::io::stderr().lock();

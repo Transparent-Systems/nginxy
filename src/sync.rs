@@ -1,7 +1,7 @@
 //! The sync loop: token refresh, source polling, per-target passes, retries.
 //!
-//! The phase structure is fixed — token refresh, source fetch,
-//! change detection, per-target reconcile — because the behaviour operators see
+//! The phase structure is fixed - token refresh, source fetch,
+//! change detection, per-target reconcile - because the behaviour operators see
 //! (how often the source is polled, when a target is retried, what a dry run
 //! prints) follows from it.
 

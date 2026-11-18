@@ -1,4 +1,4 @@
-//! Repository tasks: `cargo xtask release-notes …`
+//! Repository tasks: `cargo xtask release-notes ...`
 //!
 //! The build workflows call it for every `v*` tag, so the notes published with
 //! the binaries cannot drift from `RELEASE-NOTES.md`, and a tag that disagrees
@@ -11,7 +11,7 @@
 //!   cargo xtask release-notes --version 0.1.0        # override log.yaml
 //!   cargo xtask release-notes --tag v0.1.0           # verify the tag matches
 //!
-//! Exit codes: 0 extracted · 1 no section for that version · 2 tag/version
+//! Exit codes: 0 extracted - 1 no section for that version - 2 tag/version
 //! mismatch or unreadable file.
 
 use std::fs;

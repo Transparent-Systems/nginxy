@@ -1,4 +1,4 @@
-//! nginxy — synchronise Nginx Proxy Manager proxy hosts.
+//! nginxy - synchronise Nginx Proxy Manager proxy hosts.
 //!
 //! One source instance is read and every target instance is made to match it:
 //! fixed configuration files, one log format, the NPM API calls in a defined

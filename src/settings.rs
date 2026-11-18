@@ -1,4 +1,4 @@
-//! Configuration: `config.yaml`, `log.yaml`, `.env` — three files, one folder.
+//! Configuration: `config.yaml`, `log.yaml`, `.env` - three files, one folder.
 //!
 //! Everything is loaded once, after argument parsing, into one [`Settings`] value
 //! that is passed by reference. The config folder is itself an option
@@ -357,7 +357,7 @@ impl Settings {
     }
 }
 
-/// `target.get('name', target['url'])` — the name used in log lines.
+/// `target.get('name', target['url'])` - the name used in log lines.
 pub fn target_name(target: &TargetConfig) -> String {
     target.name.clone().unwrap_or_else(|| target.url.clone())
 }
@@ -401,7 +401,7 @@ pub fn parse_level(text: &str) -> Option<LevelFilter> {
     }
 }
 
-/// The folder the running binary lives in — the default configuration folder.
+/// The folder the running binary lives in - the default configuration folder.
 pub fn exe_dir() -> PathBuf {
     std::env::current_exe()
         .ok()
@@ -413,8 +413,8 @@ pub fn exe_dir() -> PathBuf {
 /// current-directory fallback.
 ///
 /// Order: an explicit `--config-dir`, then the binary's own folder (what a
-/// deployed installation relies on), then — only when that folder holds no
-/// `config.yaml` — the current working directory. The last step exists because
+/// deployed installation relies on), then - only when that folder holds no
+/// `config.yaml` - the current working directory. The last step exists because
 /// `cargo run` puts the executable in `target/debug`, where no configuration
 /// lives, so the repository's own `config.yaml` would never be found. The
 /// fallback is reported so the CLI can say so in the log instead of silently

@@ -1,7 +1,7 @@
 //! `${VAR}` expansion for `config.yaml` and `log.yaml`, in the style of
 //! docker-compose.
 //!
-//! Values come from the environment, with `.env` filling the gaps — the same
+//! Values come from the environment, with `.env` filling the gaps - the same
 //! rule the credentials already follow. That lets the configuration files be
 //! committed unchanged while the machine-specific half lives in `.env` or in
 //! the service manager's environment.
@@ -83,7 +83,7 @@ enum Mode {
     Required(String),
 }
 
-/// Replaces every `${…}` placeholder using `vars`.
+/// Replaces every `${...}` placeholder using `vars`.
 pub fn expand(input: &str, vars: &HashMap<String, String>) -> Result<String, ExpandError> {
     let mut out = String::with_capacity(input.len());
     let mut line = 1usize;
@@ -174,7 +174,7 @@ pub fn expand(input: &str, vars: &HashMap<String, String>) -> Result<String, Exp
 ///
 /// Working on the parsed document rather than on the raw text is what keeps
 /// documentation comments like ``Supported: ${VAR}, ${VAR:-default}`` from being
-/// treated as real placeholders — the YAML parser has already dropped comments
+/// treated as real placeholders - the YAML parser has already dropped comments
 /// by the time this runs. Object keys are left untouched.
 pub fn expand_value(
     value: &mut serde_json::Value,

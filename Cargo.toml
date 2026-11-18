@@ -9,7 +9,7 @@ edition = "2021"
 rust-version = "1.85"
 # Two binaries exist (nginxy and xtask), so `cargo run` needs to be told which
 # one is the application. Without this, `cargo run` fails with "could not
-# determine which binary to run" — including the Run button in an editor.
+# determine which binary to run" - including the Run button in an editor.
 default-run = "nginxy"
 license = "MIT"
 authors = ["John Zoetebier <john@zoetebier.net>"]

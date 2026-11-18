@@ -6,7 +6,7 @@
 .env
 /logs/
 
-# IDE — ignore the folder but keep the shared run/debug configuration
+# IDE - ignore the folder but keep the shared run/debug configuration
 .vscode/*
 !.vscode/launch.json
 !.vscode/tasks.json

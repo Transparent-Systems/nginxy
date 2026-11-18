@@ -1,4 +1,4 @@
-# `cargo xtask <task>` — repository chores kept in Rust, so CI needs no extra
+# `cargo xtask <task>` - repository chores kept in Rust, so CI needs no extra
 # tooling.
 #
 # The only task today is `release-notes`, which extracts one `## <version>`

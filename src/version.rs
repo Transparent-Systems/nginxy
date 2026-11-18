@@ -1,7 +1,7 @@
 //! Version reporting for `--version`.
 //!
 //! `log.yaml` is the file that already records the version, so it stays the
-//! first source of truth — that is what makes `--version` agree with the
+//! first source of truth - that is what makes `--version` agree with the
 //! release notes. Because `log.yaml` is *user* configuration, a binary that
 //! ships without one must still answer, which is what the compile-time
 //! fallbacks are for.

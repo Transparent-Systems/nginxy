@@ -41,7 +41,7 @@ fn source_host(port: u16) -> serde_json::Value {
 }
 
 /// A target host with the same domain set but its own id, timestamps,
-/// certificate id and nginx status — exactly what a second NPM instance returns
+/// certificate id and nginx status - exactly what a second NPM instance returns
 /// for the same configuration.
 fn target_host(port: u16) -> serde_json::Value {
     let mut host = source_host(port);
@@ -115,7 +115,7 @@ fn run_once(settings: &Settings, dry_run: bool) -> u8 {
     engine.run()
 }
 
-/// One cycle, plus the retry list it left behind — the observable that task 1.3
+/// One cycle, plus the retry list it left behind - the observable that task 1.3
 /// is about.
 fn run_and_pending(settings: &Settings, dry_run: bool) -> (u8, Vec<String>) {
     let mut engine = Engine::new(settings, 0, dry_run, Stop::new()).expect("engine");
@@ -196,8 +196,8 @@ fn updates_hosts_whose_relevant_fields_changed() {
 }
 
 /// The 1.2 regression test: the target here differs in `id`, `modified_on`,
-/// `certificate_id` and `meta` — everything a second NPM instance returns
-/// differently — yet nothing is written.
+/// `certificate_id` and `meta` - everything a second NPM instance returns
+/// differently - yet nothing is written.
 #[test]
 fn leaves_unchanged_hosts_alone() {
     let mut source = mockito::Server::new();
@@ -481,7 +481,7 @@ fn host_without_id_keeps_the_target_pending() {
     assert_eq!(pending, vec![fixture.settings.targets[0].url.clone()]);
 }
 
-/// A clean pass leaves nothing behind — the retry list must not grow forever.
+/// A clean pass leaves nothing behind - the retry list must not grow forever.
 #[test]
 fn successful_pass_leaves_nothing_pending() {
     let mut source = mockito::Server::new();

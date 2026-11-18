@@ -1,7 +1,7 @@
 //! HTTP session: one `reqwest::blocking::Client` per endpoint plus the bearer
 //! token, sent as the `Authorization` header.
 //!
-//! Blocking is deliberate — the application is a sleep-loop, not a server, so
+//! Blocking is deliberate - the application is a sleep-loop, not a server, so
 //! an async runtime would add a dependency and a scheduler for nothing.
 
 use std::time::Duration;
@@ -43,7 +43,7 @@ impl Session {
         self.token = token;
     }
 
-    /// `session.headers.pop("Authorization", None)` — the next call logs in
+    /// `session.headers.pop("Authorization", None)` - the next call logs in
     /// again. Used after transport errors and by the 12 h refresh.
     pub fn invalidate(&mut self) {
         self.token = None;
@@ -83,7 +83,7 @@ pub fn describe_failure(status: u16, body: &str) -> String {
     }
 }
 
-/// `" ".join(response.text.split())[:300]` — whitespace collapsed, 300 chars.
+/// `" ".join(response.text.split())[:300]` - whitespace collapsed, 300 chars.
 fn collapse(body: &str) -> String {
     body.split_whitespace()
         .collect::<Vec<_>>()
