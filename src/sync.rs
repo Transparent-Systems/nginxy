@@ -135,8 +135,14 @@ impl<'a> Engine<'a> {
                 continue;
             };
 
-            // Phase 2: detect whether the source moved.
-            let source_changed = self.previous_source_hosts.as_ref() != Some(&source_hosts);
+            // Phase 2: detect whether the source moved. Compared as configuration
+            // only, so a host that was merely saved (`modified_on` bumped) does
+            // not schedule every target again.
+            let source_changed = self
+                .previous_source_hosts
+                .as_ref()
+                .map(|previous| host::configuration_of(previous))
+                != Some(host::configuration_of(&source_hosts));
             if source_changed {
                 // A change on the source schedules every target again.
                 self.unsynced

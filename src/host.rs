@@ -114,6 +114,22 @@ pub fn not_synchronised_differences(source: &ProxyHost, target: &ProxyHost) -> V
         .collect()
 }
 
+/// A stable view of a host set, used to decide whether the source moved.
+///
+/// Sorted by domain key and reduced to the payload, so read-only fields
+/// (`modified_on`, `id`, …), per-instance fields (`certificate_id`, `meta`) and
+/// the order the API happens to return hosts in cannot look like a change.
+/// Without this, saving a host on the source without editing anything would mark
+/// every target unsynced again.
+pub fn configuration_of(hosts: &[ProxyHost]) -> Vec<(Vec<String>, Value)> {
+    let mut items: Vec<(Vec<String>, Value)> = hosts
+        .iter()
+        .map(|host| (host.domain_key(), host.payload()))
+        .collect();
+    items.sort_by(|left, right| left.0.cmp(&right.0));
+    items
+}
+
 /// `EXCLUDED_KEYS` (read-only) plus `NOT_SENT` (per-instance and status).
 fn is_not_sent(key: &str) -> bool {
     EXCLUDED_KEYS.contains(&key) || NOT_SENT.contains(&key)
@@ -329,6 +345,53 @@ mod tests {
         );
         // An identical pair reports nothing.
         assert!(not_synchronised_differences(&source, &sample()).is_empty());
+    }
+
+    #[test]
+    fn configuration_ignores_read_only_and_per_instance_fields() {
+        // What the live dry run showed: modified_on differs on 10 of 11 hosts,
+        // id and created_on on 9 — none of that is a configuration change.
+        let source = sample();
+        let mut other_instance = sample();
+        other_instance.id = Some(42);
+        other_instance
+            .rest
+            .insert("modified_on".into(), json!("2027-01-01T00:00:00.000Z"));
+        other_instance
+            .rest
+            .insert("certificate_id".into(), json!(9));
+        other_instance
+            .rest
+            .insert("meta".into(), json!({"nginx_online": false}));
+
+        assert_eq!(
+            configuration_of(&[source]),
+            configuration_of(&[other_instance])
+        );
+    }
+
+    #[test]
+    fn configuration_ignores_host_order() {
+        let first = host(json!({"domain_names": ["a.com"], "forward_port": 1}));
+        let second = host(json!({"domain_names": ["z.com"], "forward_port": 2}));
+        assert_eq!(
+            configuration_of(&[first.clone(), second.clone()]),
+            configuration_of(&[second, first])
+        );
+    }
+
+    #[test]
+    fn configuration_detects_real_changes() {
+        let mut changed = sample();
+        changed.rest.insert("forward_port".into(), json!(9999));
+        assert_ne!(configuration_of(&[sample()]), configuration_of(&[changed]));
+
+        // A host appearing or disappearing is a change as well.
+        let extra = host(json!({"domain_names": ["new.example.com"]}));
+        assert_ne!(
+            configuration_of(&[sample()]),
+            configuration_of(&[sample(), extra])
+        );
     }
 
     #[test]
