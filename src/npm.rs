@@ -1,9 +1,9 @@
 //! NPM API calls: token, list, create, update, delete.
 //!
-//! Each function logs the same message the Python helper it replaces logs, and
-//! follows the same failure policy: on a transport error the session's token is
-//! dropped (so the next cycle logs in again), on an HTTP error the response body
-//! is reported because NPM names the offending field there.
+//! Each function logs one message per outcome and shares one failure policy: on
+//! a transport error the session's token is dropped (so the next cycle logs in
+//! again), on an HTTP error the response body is reported because NPM names the
+//! offending field there.
 
 use reqwest::{Method, StatusCode};
 use serde_json::Value;
@@ -13,18 +13,18 @@ use crate::http::{describe_failure, Session};
 use crate::settings::Auth;
 
 /// Why a host listing failed. The caller decides how to log it, because the
-/// source and target paths word their messages differently in the Python app.
+/// source and target paths word their messages differently.
 #[derive(Debug)]
 pub enum ListError {
-    /// Non-200 answer. Python: `Failed to fetch proxy hosts from source: {code}`.
+    /// Non-200 answer; the caller logs it as `Failed to fetch proxy hosts ...`.
     Status(u16),
-    /// Could not reach the server at all (`requests.exceptions.RequestException`).
+    /// Could not reach the server at all.
     Transport(String),
     /// Reachable, but the body was not a proxy-host list.
     Decode(String),
 }
 
-/// `get_token()`: logs in and returns the bearer token.
+/// Logs in and returns the bearer token.
 pub fn request_token(session: &Session, auth: &Auth) -> Option<String> {
     let payload = match auth {
         Auth::Payload(value) => value.clone(),
@@ -33,8 +33,8 @@ pub fn request_token(session: &Session, auth: &Auth) -> Option<String> {
             return None;
         }
         Auth::Missing => {
-            // The Python app posts {"identity": null, "secret": null} and reports
-            // the 400 that NPM answers; the CLI refuses to start in this case.
+            // A login with no identity only earns a 400 from NPM; the CLI
+            // refuses to start in this case.
             log::error!("No credentials configured for {}.", session.url);
             return None;
         }
@@ -77,8 +77,8 @@ pub fn request_token(session: &Session, auth: &Auth) -> Option<String> {
 
 /// `GET {url}/nginx/proxy-hosts`.
 ///
-/// Both NPM endpoints answer `200`; the Python source path checks exactly that,
-/// so the check is shared here.
+/// Both NPM endpoints answer `200`, and that is the only success status, so
+/// the check is shared here.
 pub fn list_proxy_hosts(session: &Session) -> Result<Vec<ProxyHost>, ListError> {
     let response = session
         .get("/nginx/proxy-hosts")
@@ -94,7 +94,7 @@ pub fn list_proxy_hosts(session: &Session) -> Result<Vec<ProxyHost>, ListError> 
         .map_err(|err| ListError::Decode(err.to_string()))
 }
 
-/// `add_proxy_host()`: `POST {url}/nginx/proxy-hosts`.
+/// `POST {url}/nginx/proxy-hosts`: create one host.
 pub fn add_proxy_host(session: &mut Session, host: &ProxyHost) -> Option<Value> {
     let url = format!("{}/nginx/proxy-hosts", session.url);
     log::info!(
@@ -147,7 +147,7 @@ fn status_error(status: StatusCode, url: &str) -> String {
     }
 }
 
-/// `update_proxy_host()`: `PUT {url}/nginx/proxy-hosts/{id}`.
+/// `PUT {url}/nginx/proxy-hosts/{id}`: update one host.
 pub fn update_proxy_host(session: &mut Session, host_id: i64, host: &ProxyHost) -> Option<Value> {
     let url = format!("{}/nginx/proxy-hosts/{host_id}", session.url);
     log::info!(
@@ -195,7 +195,7 @@ pub fn update_proxy_host(session: &mut Session, host_id: i64, host: &ProxyHost) 
     }
 }
 
-/// `delete_proxy_host()`: `DELETE {url}/nginx/proxy-hosts/{id}`.
+/// `DELETE {url}/nginx/proxy-hosts/{id}`: delete one host.
 pub fn delete_proxy_host(session: &mut Session, host_id: i64, host: Option<&ProxyHost>) -> bool {
     let url = format!("{}/nginx/proxy-hosts/{host_id}", session.url);
     let domains = domains_debug(host);
@@ -236,7 +236,7 @@ pub fn delete_proxy_host(session: &mut Session, host_id: i64, host: Option<&Prox
 }
 
 /// The `domain_names` rendering used in log lines (`["a.com", "b.com"]`), or
-/// Python's `Unknown` when the host was not supplied.
+/// `Unknown` when the host was not supplied.
 fn domains_debug(host: Option<&ProxyHost>) -> String {
     match host {
         Some(host) => format!("{:?}", host.domain_names),

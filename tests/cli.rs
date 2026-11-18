@@ -59,7 +59,7 @@ fn version_is_read_from_log_yaml() {
 }
 
 #[test]
-fn help_lists_the_python_arguments() {
+fn help_lists_the_arguments() {
     nginxy()
         .arg("--help")
         .assert()
@@ -139,7 +139,7 @@ fn one_shot_sync_writes_the_log_into_the_config_folder() {
         "{log}"
     );
     assert!(log.contains("Source session not authenticated."), "{log}");
-    // Python's line format: date, comma, milliseconds, level, message.
+    // The log line format: date, comma, milliseconds, level, message.
     let first = log.lines().next().expect("at least one line");
     assert!(
         first.contains(" - INFO - Starting Sync"),

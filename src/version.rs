@@ -1,4 +1,4 @@
-//! Version reporting (`read_version()` in `main.py`).
+//! Version reporting for `--version`.
 //!
 //! `log.yaml` is the file that already records the version, so it stays the
 //! first source of truth — that is what makes `--version` agree with the
@@ -13,10 +13,10 @@ use serde_json::Value;
 
 use crate::settings::read_text;
 
-/// File that carries the `version:` key. Same name the Python app uses.
+/// File that carries the `version:` key.
 pub const VERSION_FILE: &str = "log.yaml";
 
-/// Shown when nothing at all can be determined (matches the Python fallback).
+/// Shown when nothing at all can be determined.
 pub const FALLBACK_VERSION: &str = "unknown";
 
 #[derive(Deserialize)]
@@ -35,7 +35,7 @@ pub fn read(dir: &Path) -> String {
     }
 
     // `build.rs` is free to export NGINXY_BUILD_VERSION; without it the crate
-    // version is the honest answer (the Python app said "unknown" here).
+    // version is the honest answer.
     let build = option_env!("NGINXY_BUILD_VERSION")
         .map(str::trim)
         .filter(|value| !value.is_empty())
@@ -52,7 +52,7 @@ pub fn read(dir: &Path) -> String {
 fn from_log_yaml(path: &Path) -> Option<String> {
     let text = read_text(path).ok()?;
     let parsed: VersionFile = serde_norway::from_str(&text).ok()?;
-    // Python does `str(version)`, so an unquoted `version: 1.1` still prints.
+    // An unquoted `version: 1.1` parses as a float, so stringify what came back.
     match parsed.version? {
         Value::String(text) => (!text.is_empty()).then_some(text),
         other => {

@@ -1,6 +1,6 @@
-//! The sync loop: `main()` and `sync_to_target()` from `main.py`.
+//! The sync loop: token refresh, source polling, per-target passes, retries.
 //!
-//! The phase structure is deliberately identical — token refresh, source fetch,
+//! The phase structure is fixed — token refresh, source fetch,
 //! change detection, per-target reconcile — because the behaviour operators see
 //! (how often the source is polled, when a target is retried, what a dry run
 //! prints) follows from it.
@@ -14,17 +14,16 @@ use crate::npm::{self, ListError};
 use crate::settings::{self, Auth, Settings};
 use crate::stop::Stop;
 
-/// NPM tokens live 24 h; refresh at 12 h, as the Python app does.
+/// NPM tokens live 24 h; refresh at 12 h so a long period cannot outlive one.
 pub const AUTH_REFRESH_INTERVAL: Duration = Duration::from_secs(12 * 60 * 60);
 
-/// Exit code for a run stopped with Ctrl-C, matching the Python app.
+/// Exit code for a run stopped with Ctrl-C, the shell convention for SIGINT.
 pub const EXIT_INTERRUPTED: u8 = 130;
 
 enum SyncError {
-    /// A `requests.RequestException` equivalent: the target is retried and the
-    /// token dropped.
+    /// A transport failure: the target is retried and the token dropped.
     Request(String),
-    /// Anything else (`except Exception`): reported, target retried.
+    /// Anything else: reported, target retried.
     Other(String),
     /// The target was reachable, but individual create/update/delete calls
     /// failed. The target must stay in the retry list, otherwise a write that
@@ -40,7 +39,7 @@ pub struct Engine<'a> {
     sessions: HashMap<String, Session>,
     source_auth: Auth,
     target_auth: Vec<Auth>,
-    /// Targets that still need a sync, keyed by URL like the Python set.
+    /// Targets that still need a sync, keyed by URL.
     unsynced: BTreeSet<String>,
     previous_source_hosts: Option<Vec<ProxyHost>>,
     last_auth: Option<Instant>,
@@ -225,8 +224,8 @@ impl<'a> Engine<'a> {
         if !due {
             return;
         }
-        // Python starts with last_auth_time = 0, so the very first cycle logs
-        // this line too; `None` reproduces that.
+        // The first cycle has never authenticated, so it logs this line too:
+        // `None` means "refresh now".
         log::info!("Token refresh interval reached. Invalidating sessions.");
         for session in self.sessions.values_mut() {
             session.invalidate();
@@ -301,7 +300,7 @@ impl<'a> Engine<'a> {
         }
     }
 
-    /// `sync_to_target()`: one target, one pass, with Python's error handling.
+    /// One target, one pass: every failure becomes a log line and a retry.
     fn sync_to_target(&mut self, source_hosts: &[ProxyHost], target_url: &str) -> bool {
         match self.sync_host_lists(source_hosts, target_url) {
             Ok(()) => true,
@@ -329,8 +328,8 @@ impl<'a> Engine<'a> {
             }
         }
     }
-    /// `sync_to_target()`'s body: read the target, delete what the source no
-    /// longer has, then create or update the rest.
+    /// The body of a pass: read the target, delete what the source no longer
+    /// has, then create or update the rest.
     fn sync_host_lists(
         &mut self,
         source_hosts: &[ProxyHost],
@@ -343,8 +342,8 @@ impl<'a> Engine<'a> {
         let target_hosts = {
             let session = self.session_mut(target_url)?;
             npm::list_proxy_hosts(session).map_err(|err| match err {
-                // Python calls raise_for_status(), so a non-2xx answer is a
-                // RequestException that invalidates the token.
+                // A non-2xx answer counts as a request failure, so the token
+                // is discarded as it is on a transport error.
                 ListError::Status(code) => SyncError::Request(format!("HTTP {code}")),
                 ListError::Transport(message) => SyncError::Request(message),
                 ListError::Decode(message) => SyncError::Other(message),

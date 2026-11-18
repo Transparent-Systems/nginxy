@@ -1,7 +1,8 @@
-# `cargo xtask <task>` — repository chores that must not pull Python into CI.
+# `cargo xtask <task>` — repository chores kept in Rust, so CI needs no extra
+# tooling.
 #
-# The only task today is `release-notes`, which replaces utils/release_notes.py
-# from the Python application.
+# The only task today is `release-notes`, which extracts one `## <version>`
+# section of RELEASE-NOTES.md for a GitHub Release.
 [alias]
 xtask = "run --quiet --bin xtask --"
 

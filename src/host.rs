@@ -14,7 +14,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 /// Fields the NPM API returns but must not receive back on create/update.
-/// Verbatim from `main.py:176`.
 pub const EXCLUDED_KEYS: [&str; 5] = ["id", "owner_user_id", "created_on", "modified_on", "user"];
 
 /// Fields that are neither sent nor compared.
@@ -95,8 +94,8 @@ impl ProxyHost {
 /// Comparing the payload rather than a hand-picked field list means a field NPM
 /// adds later is propagated without a code change, and that changes to
 /// read-only or per-instance fields (`modified_on`, `certificate_id`, `meta`)
-/// never trigger a write. This is the fix for the Python behaviour where a
-/// touched host object re-synced every target.
+/// never trigger a write, so touching a host on the source does not re-sync
+/// every target.
 pub fn should_update(source: &ProxyHost, target: &ProxyHost) -> bool {
     source.payload() != target.payload()
 }
@@ -135,12 +134,11 @@ fn is_not_sent(key: &str) -> bool {
     EXCLUDED_KEYS.contains(&key) || NOT_SENT.contains(&key)
 }
 
-/// Reproduces Python's `{tuple(sorted(h['domain_names'])): h for h in hosts}`.
+/// Indexes hosts by their sorted domain set.
 ///
-/// The returned key order is the order of *first* appearance (Python dict
-/// insertion order) while the map holds the *last* host for a key (Python dict
-/// assignment), so iterating `keys` and looking up in `by_key` performs the
-/// same visits in the same order as the original comprehension.
+/// The returned key order is the order of *first* appearance, while the map
+/// holds the *last* host for a key, so iterating `keys` and looking up in
+/// `by_key` visits every key once, in the order the target listed it.
 pub fn index_by_key(hosts: &[ProxyHost]) -> (Vec<Vec<String>>, HashMap<Vec<String>, &ProxyHost>) {
     let mut keys: Vec<Vec<String>> = Vec::new();
     let mut by_key: HashMap<Vec<String>, &ProxyHost> = HashMap::new();
@@ -277,8 +275,8 @@ mod tests {
 
     #[test]
     fn cosmetic_source_touch_does_not_resync() {
-        // The Python app compared whole objects, so a bumped modified_on
-        // re-synced every target even when nothing else changed.
+        // Comparing whole objects would let a bumped modified_on re-sync every
+        // target even when nothing else changed.
         let source = sample();
         let mut target = sample();
         target
@@ -308,7 +306,7 @@ mod tests {
 
     #[test]
     fn locations_and_forwarded_proto_changes_are_updates() {
-        // The two gaps the Python whitelist had: real configuration it ignored.
+        // Real configuration that a field whitelist would have ignored.
         let source = sample();
 
         let mut target = sample();

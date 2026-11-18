@@ -1,11 +1,10 @@
-//! Configuration: `config.yaml`, `log.yaml`, `.env` — the same three files, in
-//! the same folder, with the same defaults as the Python application.
+//! Configuration: `config.yaml`, `log.yaml`, `.env` — three files, one folder.
 //!
-//! Differences from `main.py` are structural only: the Python module kept the
-//! loaded values in mutable globals (`SETTINGS_DIR`, `CONFIG`, `TARGETS`,
-//! `logger`) because the config folder is itself a command-line option. Here
-//! they live in one [`Settings`] value that is loaded after argument parsing
-//! and passed by reference, so there is nothing to keep in sync.
+//! Everything is loaded once, after argument parsing, into one [`Settings`] value
+//! that is passed by reference. The config folder is itself an option
+//! (`--config-dir`), so the folder and its contents are resolved together;
+//! keeping them in a value rather than in global state makes that order explicit
+//! and leaves nothing to keep in sync.
 
 use std::collections::HashMap;
 use std::fmt;
@@ -24,7 +23,7 @@ use crate::template;
 pub const ENV_IDENTITY: &str = "NPM_SOURCE_IDENTITY";
 pub const ENV_SECRET: &str = "NPM_SOURCE_SECRET";
 
-/// File names. Identical to the Python app's, so an existing folder works.
+/// File names, fixed: the folder itself is the configuration interface.
 pub const CONFIG_FILE: &str = "config.yaml";
 pub const LOG_CONFIG_FILE: &str = "log.yaml";
 pub const ENV_FILE: &str = ".env";
@@ -117,8 +116,8 @@ pub struct TargetConfig {
 
 /// `auth_payload` as written in `config.yaml`.
 ///
-/// The Python app accepts both a YAML mapping and a JSON string
-/// (`main.py:344-352`), so both are accepted here.
+/// A YAML mapping, or a JSON string for a payload pasted in from elsewhere;
+/// both spellings describe the same login object.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub enum AuthPayload {
@@ -152,9 +151,9 @@ impl Auth {
 
 /// The `NPM_SOURCE_IDENTITY`/`NPM_SOURCE_SECRET` pair, as seen by one load.
 ///
-/// Kept as a value instead of reading `std::env` on demand so that a `.env`
-/// file is parsed without mutating the process environment (python-dotenv does
-/// mutate it, which makes behaviour depend on the order files were loaded in).
+/// Kept as a value instead of reading `std::env` on demand, so a `.env` file is
+/// parsed without mutating the process environment: a loader that exports what
+/// it reads makes behaviour depend on the order files were loaded in.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct EnvCredentials {
     pub identity: Option<String>,
@@ -181,9 +180,8 @@ impl EnvCredentials {
 
 /// Resolves the login body for one endpoint.
 ///
-/// Mirrors `get_auth_payload()`: the config wins, the environment is the
-/// fallback, and an *empty* `auth_payload` counts as absent (Python's
-/// `auth_payload or {env}` treats `{}` as falsy).
+/// The config wins, the environment is the fallback, and an *empty*
+/// `auth_payload` counts as absent: a mapping with no keys carries no login.
 pub fn resolve_auth(payload: Option<&AuthPayload>, env: &EnvCredentials) -> Auth {
     match payload {
         Some(AuthPayload::Mapping(map)) if !map.is_empty() => {
@@ -205,7 +203,7 @@ fn env_auth(env: &EnvCredentials) -> Auth {
     }
 }
 
-/// `logging:` from `log.yaml`, with the Python defaults.
+/// `logging:` from `log.yaml`, with a default applied per missing key.
 #[derive(Debug, Clone, Deserialize)]
 pub struct LoggingConfig {
     #[serde(default = "default_log_file_name")]
@@ -339,8 +337,8 @@ impl Settings {
 
     /// Source or targets that cannot log in, by display name.
     ///
-    /// The name for the source is `"source"`, exactly as the Python app reports
-    /// it; a target without a `name` falls back to its URL.
+    /// The source is reported as `"source"`; a target without a `name` falls
+    /// back to its URL.
     pub fn missing_credentials(&self) -> Vec<String> {
         self.missing_credentials_with(&self.env)
     }
@@ -366,25 +364,28 @@ pub fn target_name(target: &TargetConfig) -> String {
 
 /// Reads a UTF-8 text file, tolerating the BOM that Windows editors write.
 ///
-/// Python opens all three configuration files with `encoding='utf-8-sig'`,
-/// which strips the BOM; the YAML and `.env` parsers used here do not.
+/// The BOM is stripped as bytes before the UTF-8 check: it belongs to the
+/// encoding, not to the document, and both parsers would otherwise see it as the
+/// first character of the first key.
 pub fn read_text(path: &Path) -> io::Result<String> {
-    let bytes = fs::read(path)?;
-    let text = String::from_utf8(bytes).map_err(|_| {
+    const BOM: &[u8] = b"\xef\xbb\xbf";
+
+    let mut bytes = fs::read(path)?;
+    if bytes.starts_with(BOM) {
+        // Removed in place, so a file without a BOM is not copied at all.
+        bytes.drain(..BOM.len());
+    }
+    String::from_utf8(bytes).map_err(|_| {
         io::Error::new(
             io::ErrorKind::InvalidData,
             format!("{} is not valid UTF-8", path.display()),
         )
-    })?;
-    Ok(match text.strip_prefix('\u{feff}') {
-        Some(rest) => rest.to_string(),
-        None => text,
     })
 }
 
 /// `logging:` level names to a `log` filter.
 ///
-/// The five names Python's `logging` module uses. `CRITICAL` maps to `Error`:
+/// The five level names `log.yaml` accepts. `CRITICAL` maps to `Error`:
 /// the `log` crate has no level above error, so a CRITICAL setting keeps error
 /// lines visible instead of hiding them. An unknown name (including the old
 /// `NONE`) is reported as unrecognised, and the caller then keeps whatever
@@ -411,13 +412,13 @@ pub fn exe_dir() -> PathBuf {
 /// Resolves the configuration folder and reports whether it came from the
 /// current-directory fallback.
 ///
-/// Order: an explicit `--config-dir`, then the binary's own folder (the Python
-/// rule, and what a deployed installation relies on), then — only when that
-/// folder holds no `config.yaml` — the current working directory. The last step
-/// exists because `cargo run` puts the executable in `target/debug`, where no
-/// configuration lives, while `python main.py` used to find the repository's
-/// own `config.yaml`. The fallback is reported so the CLI can say so in the log
-/// instead of silently reading a folder the operator did not name.
+/// Order: an explicit `--config-dir`, then the binary's own folder (what a
+/// deployed installation relies on), then — only when that folder holds no
+/// `config.yaml` — the current working directory. The last step exists because
+/// `cargo run` puts the executable in `target/debug`, where no configuration
+/// lives, so the repository's own `config.yaml` would never be found. The
+/// fallback is reported so the CLI can say so in the log instead of silently
+/// reading a folder the operator did not name.
 pub fn resolve_dir(explicit: Option<&Path>) -> (PathBuf, bool) {
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     resolve_dir_from(explicit, &exe_dir(), &cwd)
@@ -439,10 +440,9 @@ fn resolve_dir_from(explicit: Option<&Path>, exe_dir: &Path, cwd: &Path) -> (Pat
 }
 
 fn read_logging_config(path: &Path, vars: &HashMap<String, String>) -> LoggingConfig {
-    // The Python app treats an unreadable or malformed log.yaml as "use the
-    // defaults" (`except (FileNotFoundError, yaml.YAMLError)`), never as a fatal
-    // error: a typo in the log settings must not stop a running sync. The same
-    // applies to an unresolvable placeholder here.
+    // An unreadable or malformed log.yaml means "use the defaults", never a
+    // fatal error: a typo in the log settings must not stop a running sync. The
+    // same applies to an unresolvable placeholder.
     read_text(path)
         .ok()
         .and_then(|text| serde_norway::from_str::<serde_json::Value>(&text).ok())
@@ -465,11 +465,12 @@ fn resolve_log_path(dir: &Path, logging: &LoggingConfig) -> PathBuf {
     folder.join(&logging.file_name)
 }
 
-/// `dotenv.load_dotenv(<dir>/.env)` — without exporting into the process.
+/// Reads `<dir>/.env` into a map, without exporting into the process.
 ///
-/// The returned map is used twice: for `NPM_SOURCE_IDENTITY`/`NPM_SOURCE_SECRET` and for
+/// The map is used twice: for `NPM_SOURCE_IDENTITY`/`NPM_SOURCE_SECRET` and for
 /// `${VAR}` placeholders in the YAML files, so both always see the same values.
-/// The real environment wins over `.env`, as python-dotenv does by default.
+/// The real environment wins over `.env`, so a service unit or container can
+/// supply the credentials instead.
 fn load_env_map(dir: &Path) -> HashMap<String, String> {
     let mut values: HashMap<String, String> = std::env::vars().collect();
 
@@ -565,5 +566,35 @@ mod tests {
         let (resolved, fallback) = resolve_dir_from(None, dir.path(), dir.path());
         assert_eq!(resolved, dir.path());
         assert!(!fallback);
+    }
+
+    #[test]
+    fn read_text_strips_a_bom_and_nothing_else() {
+        let dir = tempfile::tempdir().expect("dir");
+
+        let plain = dir.path().join("plain.txt");
+        fs::write(&plain, "version: 0.1.2\n").unwrap();
+        assert_eq!(read_text(&plain).unwrap(), "version: 0.1.2\n");
+
+        // A BOM on the very first line, as a Windows editor writes it.
+        let with_bom = dir.path().join("bom.txt");
+        fs::write(&with_bom, b"\xef\xbb\xbfversion: 0.1.2\n").unwrap();
+        assert_eq!(read_text(&with_bom).unwrap(), "version: 0.1.2\n");
+
+        // A BOM anywhere else is content and must survive.
+        let inner = dir.path().join("inner.txt");
+        fs::write(&inner, "a\u{feff}b").unwrap();
+        assert_eq!(read_text(&inner).unwrap(), "a\u{feff}b");
+    }
+
+    #[test]
+    fn read_text_rejects_invalid_utf8_and_names_the_file() {
+        let dir = tempfile::tempdir().expect("dir");
+        let path = dir.path().join("latin1.txt");
+        fs::write(&path, b"version: \xe9\n").unwrap();
+
+        let error = read_text(&path).expect_err("invalid UTF-8 must fail");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("latin1.txt"), "{error}");
     }
 }

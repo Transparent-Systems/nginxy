@@ -144,8 +144,8 @@ fn creates_hosts_missing_on_the_target() {
             "domain_names": ["app.example.com", "www.example.com"],
             "forward_host": "192.0.2.5",
             "forward_port": 8080,
-            // Ordinary configuration, propagated even though the Python
-            // whitelist ignored it.
+            // Ordinary configuration, propagated rather than dropped by a
+            // field whitelist.
             "locations": [],
             "trust_forwarded_proto": false,
             "hsts_enabled": false
@@ -263,7 +263,7 @@ fn deletes_hosts_the_source_no_longer_has() {
 }
 
 /// Custom locations are ordinary configuration: a difference must produce a PUT
-/// that carries them. The Python whitelist ignored this field entirely.
+/// that carries them. A field whitelist would have ignored this field.
 #[test]
 fn custom_locations_are_propagated() {
     let mut source = mockito::Server::new();

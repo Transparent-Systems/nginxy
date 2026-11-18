@@ -1,10 +1,9 @@
 //! Repository tasks: `cargo xtask release-notes …`
 //!
-//! A Rust port of `utils/release_notes.py` from the Python application. The
-//! build workflows call it for every `v*` tag, so the notes published with the
-//! binaries cannot drift from `RELEASE-NOTES.md`, and a tag that disagrees with
-//! the version in `log.yaml` fails the build instead of publishing the wrong
-//! notes.
+//! The build workflows call it for every `v*` tag, so the notes published with
+//! the binaries cannot drift from `RELEASE-NOTES.md`, and a tag that disagrees
+//! with the version in `log.yaml` fails the build instead of publishing the
+//! wrong notes.
 //!
 //! Usage:
 //!   cargo xtask release-notes                        # print to stdout
@@ -123,7 +122,7 @@ fn release_notes(argv: Vec<String>) -> ExitCode {
 /// Returns the body of the `## <version>` section, heading excluded.
 ///
 /// A section starts at its level-2 heading and ends at the next one, so
-/// subsections stay part of the body (as in the Python script).
+/// subsections stay part of the body.
 fn extract_section(text: &str, version: &str) -> Option<String> {
     let mut body = String::new();
     let mut inside = false;

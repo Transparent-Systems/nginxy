@@ -1,9 +1,8 @@
 //! Cooperative shutdown flag.
 //!
-//! Replaces Python's `_handle_sigint()` / `KeyboardInterrupt` pair: the signal
-//! handler only sets a flag and wakes sleepers, so a second Ctrl-C cannot land
-//! inside shutdown code (the Python comment at `main.py:556-575` explains why
-//! that mattered). Every wait in the sync loop goes through [`Stop::sleep`],
+//! The signal handler only sets a flag and wakes sleepers, so a second Ctrl-C
+//! cannot land inside shutdown code: shutdown is one-way once it has begun.
+//! Every wait in the sync loop goes through [`Stop::sleep`],
 //! which is why Ctrl-C during a 30 s period still exits immediately.
 
 use std::sync::{Arc, Condvar, Mutex};

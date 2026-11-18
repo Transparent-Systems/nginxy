@@ -1,5 +1,5 @@
 //! HTTP session: one `reqwest::blocking::Client` per endpoint plus the bearer
-//! token, replacing `requests.Session` and its `Authorization` header.
+//! token, sent as the `Authorization` header.
 //!
 //! Blocking is deliberate — the application is a sleep-loop, not a server, so
 //! an async runtime would add a dependency and a scheduler for nothing.
@@ -11,12 +11,11 @@ use reqwest::Method;
 
 use crate::settings::Auth;
 
-/// Request timeout, same value as `DEFAULT_TIMEOUT` in `main.py`.
+/// Request timeout for every call, so a silent server cannot stall a cycle.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// One endpoint. `url` is the API root from `config.yaml` (for example
-/// `http://192.0.2.10:81/api`); paths are appended verbatim, exactly as the
-/// Python f-strings do.
+/// `http://192.0.2.10:81/api`); paths are appended verbatim.
 pub struct Session {
     client: Client,
     pub url: String,
@@ -73,7 +72,7 @@ impl Session {
     }
 }
 
-/// `describe_http_failure()`: NPM explains a rejection in the body, while the
+/// Describes a failed answer: NPM explains a rejection in the body, while the
 /// status line only says "400 Client Error".
 pub fn describe_failure(status: u16, body: &str) -> String {
     let detail = collapse(body);

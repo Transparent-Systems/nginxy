@@ -1,11 +1,9 @@
-//! Logging: the same one-line format, the same rotating file, the same place.
+//! Logging: one-line records, a rotating file, and the same text on stderr.
 //!
-//! Python used a `RotatingFileHandler` plus a `StreamHandler` with a shared
-//! formatter (`main.py:67-115`). `env_logger` and `tracing-subscriber` cannot
-//! reproduce either the line format or the rotation rules without more
-//! configuration than writing the writer, so this module implements `log::Log`
-//! directly. Everything it emits goes to **stderr** and to the log file, in
-//! Python's format:
+//! `env_logger` and `tracing-subscriber` cannot reproduce either the line format
+//! or the rotation rules without more configuration than writing the writer, so
+//! this module implements `log::Log` directly. Everything it emits goes to
+//! **stderr** and to the log file, in this format:
 //!
 //! ```text
 //! 2026-11-18 08:12:33,123 - INFO - Starting Sync: 2 targets configured.
@@ -19,7 +17,7 @@ use std::sync::Mutex;
 use chrono::{DateTime, Local};
 use log::{Level, LevelFilter, Log, Metadata, Record};
 
-/// Python's level names (`WARNING`, not `WARN`).
+/// The level names written to the log (`WARNING`, not `WARN`).
 pub fn level_name(level: Level) -> &'static str {
     match level {
         Level::Error => "ERROR",
@@ -30,7 +28,7 @@ pub fn level_name(level: Level) -> &'static str {
     }
 }
 
-/// Formats one record exactly like `'%(asctime)s - %(levelname)s - %(message)s'`.
+/// Formats one record: local time with milliseconds, the level, then the message.
 pub fn format_record_at(timestamp: DateTime<Local>, level: Level, message: &str) -> String {
     format!(
         "{},{:03} - {} - {}",
@@ -46,12 +44,11 @@ pub fn format_record(level: Level, message: &str) -> String {
     format_record_at(Local::now(), level, message)
 }
 
-/// Append-only file that rotates the way `RotatingFileHandler` does.
+/// Append-only file that rotates by size and keeps a bounded history.
 ///
 /// Rotation happens *before* a write that would reach `max_bytes`, renames
 /// `name` to `name.1` (shifting `name.1` to `name.2` and so on) and drops the
-/// oldest backup beyond `max_backups`. `max_bytes == 0` disables rotation, as
-/// in Python.
+/// oldest backup beyond `max_backups`. `max_bytes == 0` disables rotation.
 #[derive(Debug)]
 pub struct RotatingFile {
     path: PathBuf,
@@ -225,7 +222,7 @@ mod tests {
     }
 
     #[test]
-    fn line_format_matches_python() {
+    fn line_format_is_time_level_and_message() {
         let line = format_record_at(
             at(33, 123),
             Level::Info,
@@ -238,7 +235,7 @@ mod tests {
     }
 
     #[test]
-    fn level_names_use_python_spelling() {
+    fn level_names_spell_warning_in_full() {
         assert_eq!(level_name(Level::Warn), "WARNING");
         assert_eq!(level_name(Level::Error), "ERROR");
         assert_eq!(level_name(Level::Debug), "DEBUG");

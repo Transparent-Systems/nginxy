@@ -1,9 +1,8 @@
 //! Command line interface: argument parsing, exit codes and signal setup.
 //!
-//! The flags, defaults and exit codes are the Python app's, with one deliberate
-//! difference: `--log-level` has no default, so `log_level` in `log.yaml`
-//! applies unless the flag is given. The Python app's `NONE` spelling for "use
-//! log.yaml" was dropped — with the flag optional it had nothing left to mean.
+//! `--log-level` has no default, so `log_level` in `log.yaml` applies unless the
+//! flag is given. That also retires the old `NONE` spelling for "use log.yaml",
+//! which with an optional flag had nothing left to mean.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -19,13 +18,12 @@ use crate::stop::Stop;
 use crate::sync::{Engine, EXIT_INTERRUPTED};
 use crate::version;
 
-/// Exit code for unusable configuration or credentials — what `argparse` and
-/// the Python `run()` both return.
+/// Exit code for unusable configuration or credentials: the run never started.
 pub const EXIT_CONFIG: u8 = 2;
 
 fn log_level_values() -> PossibleValuesParser {
-    // The five names Python's `logging` module knows. There is deliberately no
-    // `NONE`: "no override" is what omitting `--log-level` does.
+    // The five level names `log.yaml` accepts. There is deliberately no `NONE`:
+    // "no override" is what omitting `--log-level` does.
     PossibleValuesParser::new(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
 }
 
@@ -33,7 +31,7 @@ fn log_level_values() -> PossibleValuesParser {
 #[command(
     name = "nginxy",
     about = "Synchronise proxy hosts on target Nginx Proxy Manager servers from a source server",
-    // `--version` is a plain flag here (as in the Python app) so that it can be
+    // `--version` is a plain flag, not clap's generated one, so that it can be
     // read from log.yaml instead of Cargo's version.
     disable_version_flag = true
 )]
@@ -91,7 +89,7 @@ where
         Ok(args) => args,
         Err(err) => {
             // clap prints --help to stdout and errors to stderr, and uses exit
-            // code 0 for the former, 2 for the latter (as argparse does).
+            // code 0 for the former, 2 for the latter.
             let _ = err.print();
             return ExitCode::from(if err.use_stderr() { EXIT_CONFIG } else { 0 });
         }
@@ -239,8 +237,8 @@ mod tests {
 
     #[test]
     fn none_is_not_a_level() {
-        // `NONE` was the Python spelling for "do not override"; with the flag
-        // optional it is gone, so a caller passing it falls back to the file.
+        // `NONE` used to mean "do not override". With the flag optional it is
+        // gone, so a caller passing it falls back to the configured level.
         assert_eq!(
             resolve_level(Some("NONE"), LevelFilter::Error),
             LevelFilter::Error
