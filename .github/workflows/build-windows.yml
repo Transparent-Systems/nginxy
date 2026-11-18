@@ -33,9 +33,10 @@ jobs:
           $image = [System.Text.Encoding]::ASCII.GetString($bytes)
           foreach ($dll in 'VCRUNTIME140.dll', 'MSVCP140.dll') {
             if ($image.Contains($dll)) {
-              throw "the exe imports $dll: it would not start without the VC++ Redistributable"
+              throw "the exe imports ${dll}: it would not start without the VC++ Redistributable"
             }
           }
+          'no Visual C++ runtime imports'
       # Prove the binary really starts. --version and --help need no
       # configuration; the run below uses --config-dir, so CI never relies on a
       # config.yaml sitting next to the exe.
