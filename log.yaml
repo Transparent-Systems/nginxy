@@ -1,10 +1,9 @@
 # nginxy — logging configuration and the version reported by --version.
 #
-# Same file, same keys and same defaults as nginx-sync. A missing or malformed
-# copy is not fatal: the defaults below apply.
+# A missing or malformed copy is not fatal: the defaults below apply.
 version: 0.1.1
 logging:
-  file_name: nginx_sync.log
+  file_name: nginxy.log
   folder: logs
   max_bytes: 10485760
   max_backup_count: 3

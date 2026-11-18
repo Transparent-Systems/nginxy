@@ -42,7 +42,7 @@ statically linked, so no `GLIBC_2.xx` surprises.
     example), name that folder instead:
 
     ```bash
-    nginxy --config-dir /etc/nginx-sync -p 30
+    nginxy --config-dir /etc/nginxy -p 30
     ```
 
 ## Script arguments
@@ -147,11 +147,8 @@ Rules worth knowing:
 - Only **values** are expanded, never comments: a documentation block may show
   `${VAR}` without asking for a value.
 - `NPM_SOURCE_IDENTITY`/`NPM_SOURCE_SECRET` still work without any placeholder, so
-  a folder needs no placeholders at all. These are the only credential variable
-  names: a `.env` copied from `nginx-sync` needs its two keys renamed (see
-  RELEASE-NOTES).
-  This is an addition on top of the Python behaviour, not a replacement.
-
+  a folder needs no placeholders at all.
+  
 ## What a sync does
 
 For every target, on every cycle in which the source changed (or the target has
@@ -204,7 +201,7 @@ makes the editor's Run button, F5 and `cargo run` work from the repository root:
 cargo run -- -p 0                        # one sync, then exit
 cargo run -- -p 30                       # the normal loop; Ctrl-C stops it
 cargo run -- --dry-run -p 0              # report only, write nothing
-cargo run -- --config-dir /etc/nginx-sync -p 30
+cargo run -- --config-dir /etc/nginxy -p 30
 ```
 
 You still need credentials. Create `.env` in the folder being read:
@@ -213,12 +210,10 @@ You still need credentials. Create `.env` in the folder being read:
 printf 'NPM_SOURCE_IDENTITY=your_identity\nNPM_SOURCE_SECRET=your_secret\n' > .env
 ```
 
-`.env` is git-ignored. To reuse an existing `nginx-sync` installation without
-copying anything, point at its folder (this reads its servers and writes into
-*its* `logs/` folder):
+`.env` is git-ignored.
 
 ```bash
-cargo run -- --config-dir ../nginx-sync --dry-run -p 0
+cargo run -- --config-dir ../nginxy --dry-run -p 0
 ```
 
 ### In VS Code
@@ -291,7 +286,7 @@ MIT — see [LICENSE](LICENSE).
 
 ## Why nginxy?
 
-The use case is unchanged from nginx-sync:
+The use case is:
 
 - You run servers behind a Cloudflare tunnel with a `cloudflared` daemon
 - The tunnel connects to an Nginx Proxy Manager instance that forwards requests

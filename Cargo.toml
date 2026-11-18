@@ -1,7 +1,6 @@
-# nginxy — a Rust port of `nginx-sync`.
+# nginxy synchronizes the configuration of Nginx Proxy Manager proxy hosts from a source instance to one or more target instances.
 #
-# Reads the same config.yaml / log.yaml / .env as the Python application and
-# performs the same NPM proxy-host synchronisation, as a single native binary.
+# Reads config.yaml, log.yaml and .env
 # The behavioural contract this crate is written against is PLAN.md (§2).
 [package]
 name = "nginxy"
