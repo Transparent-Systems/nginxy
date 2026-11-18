@@ -4,34 +4,10 @@ A Rust rewrite of [nginx-sync](https://github.com/Transparent-Systems/nginx-sync
 it keeps the proxy host configuration of one source Nginx Proxy Manager (NPM)
 instance in step with one or more target instances.
 
-`nginxy` reads the **same** `config.yaml`, `log.yaml` and `.env`, from the same
-folder, and writes the same log file. The difference is the binary: one native
+`nginxy` reads a `config.yaml`, `log.yaml` and `.env`, from the same
+folder, and writes a log file. The main difference is the binary: one native
 executable, no Python, no interpreter, no bundled C runtime. The Linux build is
 statically linked, so no `GLIBC_2.xx` surprises.
-
-## Coming from nginx-sync
-
-The configuration folder carries over; only the two credential keys in `.env`
-were renamed:
-
-```bash
-sed -i 's/^NPM_IDENTITY=/NPM_SOURCE_IDENTITY=/; s/^NPM_SECRET=/NPM_SOURCE_SECRET=/' .env
-```
-
-`config.yaml` and `log.yaml` are read unchanged (including a BOM), and every
-command-line flag is identical: `-p`, `-l`, `--dry-run`, `--config-dir`,
-`--version`. What you may notice:
-
-- Domain lists in log lines render as `["a.com", "b.com"]` instead of `['a.com', 'b.com']`.
-- `--version` falls back to the binary's own version when the folder has no `log.yaml`.
-- Running from a checkout (`cargo run`) uses the current directory when the
-  binary's own folder has no `config.yaml`, and logs a warning saying so.
-
-For a side-by-side check, run both tools with `--dry-run -p 0` on the same
-folder and diff the two log files, ignoring the timestamps. Since the Python
-tool only reads `NPM_IDENTITY`/`NPM_SECRET`, keep **both** spellings in `.env`
-during that comparison — each tool reads the pair it knows and ignores the
-other; delete the old pair once `nginx-sync` is retired.
 
 ## Quick start
 
