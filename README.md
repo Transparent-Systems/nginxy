@@ -92,14 +92,14 @@ NPM_SOURCE_SECRET=your_secret
 ```yaml
 version: 0.1.1
 logging:
-  file_name: nginx_sync.log
+  file_name: nginxy.log
   folder: logs
   max_bytes: 10485760
   max_backup_count: 3
   log_level: INFO
 ```
 
-Logs go to `<config-dir>/logs/nginx_sync.log` and to stderr, in the line format
+Logs go to `<config-dir>/logs/nginxy.log` and to stderr, in the line format
 `2026-11-18 08:12:33,123 - INFO - message`.
 
 ### Variables in the configuration files

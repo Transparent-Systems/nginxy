@@ -27,7 +27,7 @@ targets:
 
 const SAMPLE_LOG: &str = r#"version: 1.1.0
 logging:
-  file_name: nginx_sync.log
+  file_name: nginxy.log
   folder: logs
   max_bytes: 10485760
   max_backup_count: 3
@@ -58,14 +58,14 @@ fn loads_a_deployed_configuration() {
     assert_eq!(settings.targets[1].url, "http://192.0.2.12:81/api");
 
     // logging defaults and values from log.yaml
-    assert_eq!(settings.logging.file_name, "nginx_sync.log");
+    assert_eq!(settings.logging.file_name, "nginxy.log");
     assert_eq!(settings.logging.folder, "logs");
     assert_eq!(settings.logging.max_bytes, 10_485_760);
     assert_eq!(settings.logging.max_backup_count, 3);
     assert_eq!(settings.log_level, log::LevelFilter::Info);
     assert_eq!(
         settings.log_path,
-        dir.path().join("logs").join("nginx_sync.log")
+        dir.path().join("logs").join("nginxy.log")
     );
     assert_eq!(settings.dir, dir.path());
 }
@@ -82,7 +82,7 @@ fn accepts_a_byte_order_mark() {
 
     let settings = Settings::load(dir.path()).expect("settings load with BOM");
     assert_eq!(settings.targets.len(), 2);
-    assert_eq!(settings.logging.file_name, "nginx_sync.log");
+    assert_eq!(settings.logging.file_name, "nginxy.log");
 }
 
 #[test]
@@ -114,7 +114,7 @@ fn absent_log_yaml_falls_back_to_defaults() {
     let dir = tempfile::tempdir().expect("temp dir");
     write(dir.path(), "config.yaml", SAMPLE_CONFIG);
     let settings = Settings::load(dir.path()).expect("settings load");
-    assert_eq!(settings.logging.file_name, "nginx_sync.log");
+    assert_eq!(settings.logging.file_name, "nginxy.log");
     assert_eq!(settings.logging.max_backup_count, 3);
     assert_eq!(settings.log_level, log::LevelFilter::Info);
 }

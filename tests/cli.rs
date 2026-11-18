@@ -26,7 +26,7 @@ fn dead_end_config(dir: &Path) {
     write(
         dir,
         "log.yaml",
-        "version: 9.9.9\nlogging:\n  file_name: nginx_sync.log\n  folder: logs\n  log_level: INFO\n",
+        "version: 9.9.9\nlogging:\n  file_name: nginxy.log\n  folder: logs\n  log_level: INFO\n",
     );
     write(
         dir,
@@ -132,7 +132,7 @@ fn one_shot_sync_writes_the_log_into_the_config_folder() {
         .assert()
         .success();
 
-    let log = fs::read_to_string(dir.path().join("logs").join("nginx_sync.log"))
+    let log = fs::read_to_string(dir.path().join("logs").join("nginxy.log"))
         .expect("log file written into --config-dir");
     assert!(
         log.contains("Starting Sync: 1 targets configured."),
@@ -158,7 +158,7 @@ fn dry_run_is_reported_in_the_log() {
         .assert()
         .success();
 
-    let log = fs::read_to_string(dir.path().join("logs").join("nginx_sync.log")).expect("log");
+    let log = fs::read_to_string(dir.path().join("logs").join("nginxy.log")).expect("log");
     assert!(
         log.contains("Starting Sync (DRY RUN MODE): 1 targets configured."),
         "{log}"
@@ -166,7 +166,7 @@ fn dry_run_is_reported_in_the_log() {
 }
 
 /// Ctrl-C must end the run promptly even in the middle of a long period, with
-/// the Python app's exit code and shutdown message (PLAN.md §6-M5).
+/// exit code 130 and the shutdown message (PLAN.md §2.1).
 #[cfg(unix)]
 #[test]
 fn ctrl_c_exits_with_130_during_a_long_period() {
@@ -202,7 +202,7 @@ fn ctrl_c_exits_with_130_during_a_long_period() {
         started.elapsed()
     );
 
-    let log = fs::read_to_string(dir.path().join("logs").join("nginx_sync.log")).expect("log");
+    let log = fs::read_to_string(dir.path().join("logs").join("nginxy.log")).expect("log");
     assert!(
         log.contains("Sync process interrupted by user. Exiting gracefully."),
         "{log}"
@@ -222,7 +222,7 @@ fn run_without_config_dir_uses_the_current_directory() {
         .assert()
         .success();
 
-    let log = fs::read_to_string(dir.path().join("logs").join("nginx_sync.log")).expect("log");
+    let log = fs::read_to_string(dir.path().join("logs").join("nginxy.log")).expect("log");
     assert!(
         log.contains("No config.yaml next to the binary; using"),
         "the fallback must be visible in the log: {log}"
@@ -248,21 +248,17 @@ fn explicit_config_dir_is_not_affected_by_the_current_directory() {
         .assert()
         .success();
 
-    let log = fs::read_to_string(config.path().join("logs").join("nginx_sync.log")).expect("log");
+    let log = fs::read_to_string(config.path().join("logs").join("nginxy.log")).expect("log");
     assert!(!log.contains("from the current directory"), "{log}");
     assert!(
-        !elsewhere
-            .path()
-            .join("logs")
-            .join("nginx_sync.log")
-            .exists(),
+        !elsewhere.path().join("logs").join("nginxy.log").exists(),
         "the current directory must not be used"
     );
 }
 
-/// `log_level` in `log.yaml` must be honoured without any command-line flag:
-/// that is the quirk fix (PLAN.md §2.5.3). `log_level: ERROR` hides the INFO
-/// lines but keeps the ERROR ones.
+/// `log_level` in `log.yaml` must be honoured without any command-line flag
+/// (PLAN.md §2.6). `log_level: ERROR` hides the INFO lines but keeps the ERROR
+/// ones.
 #[test]
 fn log_level_from_log_yaml_applies_without_the_option() {
     let dir = tempfile::tempdir().expect("temp dir");
@@ -270,7 +266,7 @@ fn log_level_from_log_yaml_applies_without_the_option() {
     write(
         dir.path(),
         "log.yaml",
-        "version: 9.9.9\nlogging:\n  file_name: nginx_sync.log\n  folder: logs\n  log_level: ERROR\n",
+        "version: 9.9.9\nlogging:\n  file_name: nginxy.log\n  folder: logs\n  log_level: ERROR\n",
     );
 
     nginxy()
@@ -279,7 +275,7 @@ fn log_level_from_log_yaml_applies_without_the_option() {
         .assert()
         .success();
 
-    let log = fs::read_to_string(dir.path().join("logs").join("nginx_sync.log")).expect("log");
+    let log = fs::read_to_string(dir.path().join("logs").join("nginxy.log")).expect("log");
     assert!(
         !log.contains("Starting Sync"),
         "an INFO line must be filtered out at ERROR level: {log}"
@@ -298,7 +294,7 @@ fn log_level_option_overrides_log_yaml() {
     write(
         dir.path(),
         "log.yaml",
-        "version: 9.9.9\nlogging:\n  file_name: nginx_sync.log\n  folder: logs\n  log_level: ERROR\n",
+        "version: 9.9.9\nlogging:\n  file_name: nginxy.log\n  folder: logs\n  log_level: ERROR\n",
     );
 
     nginxy()
@@ -307,7 +303,7 @@ fn log_level_option_overrides_log_yaml() {
         .assert()
         .success();
 
-    let log = fs::read_to_string(dir.path().join("logs").join("nginx_sync.log")).expect("log");
+    let log = fs::read_to_string(dir.path().join("logs").join("nginxy.log")).expect("log");
     assert!(
         log.contains("Starting Sync"),
         "INFO must win over log.yaml here: {log}"

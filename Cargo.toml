@@ -1,7 +1,7 @@
 # nginxy synchronizes the configuration of Nginx Proxy Manager proxy hosts from a source instance to one or more target instances.
 #
 # Reads config.yaml, log.yaml and .env
-# The behavioural contract this crate is written against is PLAN.md (§2).
+# The behavioural contract this crate is written against is doc/PLAN.md (§2).
 [package]
 name = "nginxy"
 version = "0.1.1"

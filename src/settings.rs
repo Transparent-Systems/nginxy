@@ -221,7 +221,7 @@ pub struct LoggingConfig {
 }
 
 fn default_log_file_name() -> String {
-    "nginx_sync.log".to_string()
+    "nginxy.log".to_string()
 }
 
 fn default_log_folder() -> String {

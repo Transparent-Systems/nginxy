@@ -247,7 +247,7 @@ mod tests {
     #[test]
     fn appends_newline_and_creates_parent_folders() {
         let dir = tempfile::tempdir().expect("temp dir");
-        let path = dir.path().join("logs").join("nginx_sync.log");
+        let path = dir.path().join("logs").join("nginxy.log");
         let mut file = RotatingFile::open(&path, 0, 3).expect("open");
 
         file.write_line("first").expect("write");
@@ -260,7 +260,7 @@ mod tests {
     #[test]
     fn rotates_before_exceeding_max_bytes_and_keeps_backups() {
         let dir = tempfile::tempdir().expect("temp dir");
-        let path = dir.path().join("nginx_sync.log");
+        let path = dir.path().join("nginxy.log");
         // Each record is 4 bytes ("abc\n"); a 10-byte budget allows two.
         let mut file = RotatingFile::open(&path, 10, 2).expect("open");
 
@@ -285,7 +285,7 @@ mod tests {
     #[test]
     fn zero_max_bytes_disables_rotation() {
         let dir = tempfile::tempdir().expect("temp dir");
-        let path = dir.path().join("nginx_sync.log");
+        let path = dir.path().join("nginxy.log");
         let mut file = RotatingFile::open(&path, 0, 3).expect("open");
         for _ in 0..50 {
             file.write_line("a record long enough to matter")

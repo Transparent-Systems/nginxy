@@ -1,6 +1,6 @@
 //! API contract tests against a mock NPM.
 //!
-//! These are the executable version of PLAN.md §6-M4: what must be created,
+//! These are the executable version of PLAN.md §2.4–§2.5: what must be created,
 //! updated and deleted, in which order, and what a dry run must not send.
 
 use std::fs;
