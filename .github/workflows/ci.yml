@@ -21,7 +21,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v3
+      # v2 is the newest major of rust-cache; a v3 tag does not exist, and asking
+      # for it fails the whole job at "Set up job" before any step runs.
+      - uses: Swatinem/rust-cache@v2
       - name: Format
         run: cargo fmt --all --check
       - name: Clippy

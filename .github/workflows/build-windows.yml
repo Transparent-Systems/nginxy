@@ -14,7 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v3
+      # v2 is the newest major of rust-cache; a v3 tag does not exist, and asking
+      # for it fails the whole job at "Set up job" before any step runs.
+      - uses: Swatinem/rust-cache@v2
       - name: Build the binary
         run: |
           cargo build --release --locked
