@@ -166,7 +166,7 @@ fn dry_run_is_reported_in_the_log() {
 }
 
 /// Ctrl-C must end the run promptly even in the middle of a long period, with
-/// exit code 130 and the shutdown message (PLAN.md §2.1).
+/// exit code 130 and the shutdown message (PLAN.md Section 2.1).
 #[cfg(unix)]
 #[test]
 fn ctrl_c_exits_with_130_during_a_long_period() {
@@ -257,7 +257,7 @@ fn explicit_config_dir_is_not_affected_by_the_current_directory() {
 }
 
 /// `log_level` in `log.yaml` must be honoured without any command-line flag
-/// (PLAN.md §2.6). `log_level: ERROR` hides the INFO lines but keeps the ERROR
+/// (PLAN.md Section 2.6). `log_level: ERROR` hides the INFO lines but keeps the ERROR
 /// ones.
 #[test]
 fn log_level_from_log_yaml_applies_without_the_option() {

@@ -2,7 +2,7 @@
 //!
 //! One source instance is read and every target instance is made to match it:
 //! fixed configuration files, one log format, the NPM API calls in a defined
-//! order, and exit codes a service manager can act on. `doc/PLAN.md` §2
+//! order, and exit codes a service manager can act on. `doc/PLAN.md` Section 2
 //! ("Behavioural contract") is the list the tests here are written against.
 //!
 //! Module map:
