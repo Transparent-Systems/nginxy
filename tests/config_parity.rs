@@ -121,12 +121,14 @@ fn absent_log_yaml_falls_back_to_defaults() {
 
 #[test]
 fn absolute_log_folder_is_used_as_given() {
-    let _dir = tempfile::tempdir().expect("temp dir");
     let elsewhere = tempfile::tempdir().expect("temp dir");
-    let log = format!(
-        "logging:\n  folder: \"{}\"\n  file_name: other.log\n",
-        elsewhere.path().display()
-    );
+    // A JSON string is also a valid YAML double-quoted scalar, and it escapes
+    // the separators. Writing the path raw would break on Windows, where
+    // "C:\Users\..." contains YAML escape sequences: log.yaml would not parse,
+    // and an unparseable log.yaml deliberately means "use the defaults".
+    let folder = serde_json::to_string(&elsewhere.path().display().to_string())
+        .expect("quote the log folder");
+    let log = format!("logging:\n  folder: {folder}\n  file_name: other.log\n");
     let (_dir, settings) = load(PYTHON_CONFIG, &log);
     assert_eq!(settings.log_path, elsewhere.path().join("other.log"));
 }
