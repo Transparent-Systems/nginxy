@@ -1,6 +1,12 @@
-//! The proxy-host record and the three rules the Python app applies to it:
-//! payload filtering (`EXCLUDED_KEYS`), domain-set identity for diffing, and
-//! the ten-field comparison in `should_update()`.
+//! The proxy-host record and the rules applied to it: what may be sent to a
+//! target, what counts as a difference, and which domain sets are the same host.
+//!
+//! The classification is a **deny-list**, not a whitelist. Everything NPM
+//! returns is treated as configuration to be propagated, except the two
+//! explicit sets below. That way a field added by a future NPM version is
+//! compared and forwarded automatically instead of being silently dropped —
+//! `every_field_is_classified` in the tests fails if a field ever appears that
+//! is neither propagated nor deliberately excluded.
 
 use std::collections::HashMap;
 
@@ -11,20 +17,23 @@ use serde_json::{Map, Value};
 /// Verbatim from `main.py:176`.
 pub const EXCLUDED_KEYS: [&str; 5] = ["id", "owner_user_id", "created_on", "modified_on", "user"];
 
-/// Fields `should_update()` compares. Verbatim from `main.py:503-510` — adding
-/// or removing a name here changes how often target servers are rewritten.
-pub const RELEVANT_KEYS: [&str; 10] = [
-    "forward_host",
-    "forward_port",
-    "forward_scheme",
-    "advanced_config",
-    "ssl_forced",
-    "http2_support",
-    "block_exploits",
-    "caching_enabled",
-    "allow_websocket_upgrade",
-    "enabled",
-];
+/// Fields that are neither sent nor compared.
+///
+/// * `certificate_id` and `access_list_id` are identifiers inside *one* NPM
+///   database. The same number means a different certificate or access list on
+///   another instance, so copying them would attach the wrong object or fail.
+/// * `meta` holds runtime status (`nginx_online`, `nginx_err` on NPM 2.17), which
+///   changes for reasons that have nothing to do with the configuration.
+///
+/// `locations` and `trust_forwarded_proto`, by contrast, are ordinary
+/// configuration and are therefore propagated.
+pub const NOT_SENT: [&str; 3] = ["certificate_id", "access_list_id", "meta"];
+
+/// The subset of [`NOT_SENT`] an operator could reasonably expect to be
+/// synchronised. The sync loop logs a line when one of these differs, so the
+/// gap is visible instead of silent. `meta` is not listed: it is status, and
+/// reporting it would just echo whether nginx is up.
+pub const REPORTED_AS_NOT_SENT: [&str; 2] = ["certificate_id", "access_list_id"];
 
 /// A proxy host as NPM returns it.
 ///
@@ -50,11 +59,12 @@ impl ProxyHost {
         serde_json::from_value(value)
     }
 
-    /// The body for `POST`/`PUT`: everything except the read-only fields.
+    /// The body for `POST`/`PUT`: everything except the read-only and the
+    /// per-instance fields (`EXCLUDED_KEYS` and `NOT_SENT`).
     pub fn payload(&self) -> Value {
         let mut map = Map::new();
         for (key, value) in &self.rest {
-            if EXCLUDED_KEYS.contains(&key.as_str()) {
+            if is_not_sent(key) {
                 continue;
             }
             map.insert(key.clone(), value.clone());
@@ -80,14 +90,33 @@ impl ProxyHost {
     }
 }
 
-/// True when any of the [`RELEVANT_KEYS`] differs.
+/// True when any field we would send differs.
 ///
-/// A key that is absent and a key holding JSON `null` are *not* equal here,
-/// matching Python's `dict.get()` returning a distinct value for each.
+/// Comparing the payload rather than a hand-picked field list means a field NPM
+/// adds later is propagated without a code change, and that changes to
+/// read-only or per-instance fields (`modified_on`, `certificate_id`, `meta`)
+/// never trigger a write. This is the fix for the Python behaviour where a
+/// touched host object re-synced every target.
 pub fn should_update(source: &ProxyHost, target: &ProxyHost) -> bool {
-    RELEVANT_KEYS
+    source.payload() != target.payload()
+}
+
+/// Per-instance fields that differ between the two hosts.
+///
+/// They are deliberately not synchronised, but an operator who added a
+/// certificate or an access list on the source deserves to see why the targets
+/// did not get it.
+pub fn not_synchronised_differences(source: &ProxyHost, target: &ProxyHost) -> Vec<&'static str> {
+    REPORTED_AS_NOT_SENT
         .iter()
-        .any(|key| source.rest.get(*key) != target.rest.get(*key))
+        .copied()
+        .filter(|key| source.rest.get(*key) != target.rest.get(*key))
+        .collect()
+}
+
+/// `EXCLUDED_KEYS` (read-only) plus `NOT_SENT` (per-instance and status).
+fn is_not_sent(key: &str) -> bool {
+    EXCLUDED_KEYS.contains(&key) || NOT_SENT.contains(&key)
 }
 
 /// Reproduces Python's `{tuple(sorted(h['domain_names'])): h for h in hosts}`.
@@ -120,6 +149,8 @@ mod tests {
         ProxyHost::from_json(value).expect("valid proxy host")
     }
 
+    /// Shaped like a host from NPM 2.17 (see the schema check in the transcript):
+    /// every field the API returns, including the ones we filter.
     fn sample() -> ProxyHost {
         host(json!({
             "id": 7,
@@ -127,6 +158,9 @@ mod tests {
             "created_on": "2026-01-01T00:00:00.000Z",
             "modified_on": "2026-01-02T00:00:00.000Z",
             "user": {"id": 1},
+            "certificate_id": 0,
+            "access_list_id": 0,
+            "meta": {"nginx_online": true, "nginx_err": null},
             "domain_names": ["b.example.com", "a.example.com"],
             "forward_host": "192.0.2.5",
             "forward_port": 8080,
@@ -134,22 +168,47 @@ mod tests {
             "advanced_config": "",
             "ssl_forced": true,
             "http2_support": false,
+            "hsts_enabled": false,
+            "hsts_subdomains": false,
+            "trust_forwarded_proto": false,
             "block_exploits": true,
             "caching_enabled": false,
             "allow_websocket_upgrade": true,
             "enabled": true,
+            "locations": [],
             "unknown_future_field": {"kept": true}
         }))
     }
 
+    /// A value of the same kind but different content, used to prove that a
+    /// field participates in the comparison.
+    fn changed(value: &Value) -> Value {
+        match value {
+            Value::Bool(flag) => Value::Bool(!flag),
+            Value::Number(number) => Value::from(number.as_i64().unwrap_or(0) + 1),
+            Value::String(text) => Value::String(format!("{text}-changed")),
+            Value::Array(items) => {
+                let mut items = items.clone();
+                items.push(json!("added"));
+                Value::Array(items)
+            }
+            Value::Object(map) => {
+                let mut map = map.clone();
+                map.insert("changed".into(), json!(true));
+                Value::Object(map)
+            }
+            Value::Null => json!("changed"),
+        }
+    }
+
     #[test]
-    fn payload_drops_read_only_fields_and_keeps_the_rest() {
+    fn payload_drops_read_only_and_per_instance_fields() {
         let payload = sample().payload();
         let object = payload.as_object().expect("object");
 
-        for excluded in EXCLUDED_KEYS {
+        for excluded in EXCLUDED_KEYS.iter().chain(NOT_SENT.iter()) {
             assert!(
-                !object.contains_key(excluded),
+                !object.contains_key(*excluded),
                 "{excluded} must not be sent"
             );
         }
@@ -162,8 +221,10 @@ mod tests {
             object.get("domain_names"),
             Some(&json!(["b.example.com", "a.example.com"]))
         );
-        // Forwarded verbatim, still an integer.
         assert_eq!(object.get("forward_port"), Some(&json!(8080)));
+        // These are ordinary configuration and must be propagated.
+        assert_eq!(object.get("locations"), Some(&json!([])));
+        assert_eq!(object.get("trust_forwarded_proto"), Some(&json!(false)));
     }
 
     #[test]
@@ -182,7 +243,7 @@ mod tests {
     }
 
     #[test]
-    fn should_update_ignores_irrelevant_fields() {
+    fn read_only_and_per_instance_changes_are_not_updates() {
         let source = sample();
         let mut target = sample();
         target.id = Some(99);
@@ -190,26 +251,91 @@ mod tests {
             .rest
             .insert("modified_on".into(), json!("2027-01-01T00:00:00.000Z"));
         target.rest.insert("certificate_id".into(), json!(4));
+        target.rest.insert("access_list_id".into(), json!(2));
+        target.rest.insert(
+            "meta".into(),
+            json!({"nginx_online": false, "nginx_err": "down"}),
+        );
         assert!(!should_update(&source, &target));
     }
 
     #[test]
-    fn should_update_detects_each_relevant_field() {
+    fn cosmetic_source_touch_does_not_resync() {
+        // The Python app compared whole objects, so a bumped modified_on
+        // re-synced every target even when nothing else changed.
         let source = sample();
-        for key in RELEVANT_KEYS {
+        let mut target = sample();
+        target
+            .rest
+            .insert("modified_on".into(), json!("2020-01-01T00:00:00.000Z"));
+        assert!(!should_update(&source, &target));
+    }
+
+    #[test]
+    fn every_field_is_classified() {
+        // If NPM adds a field, this fails and names it: the choice between
+        // "propagate" (default) and "per-instance, exclude" cannot be forgotten.
+        let source = sample();
+        for key in source.rest.keys() {
+            if EXCLUDED_KEYS.contains(&key.as_str()) || NOT_SENT.contains(&key.as_str()) {
+                continue;
+            }
             let mut target = sample();
-            target.rest.insert(key.to_string(), json!("changed"));
+            let replacement = changed(target.rest.get(key.as_str()).expect("key present"));
+            target.rest.insert(key.clone(), replacement);
             assert!(
                 should_update(&source, &target),
-                "a change to {key} must trigger an update"
+                "{key} is neither propagated nor excluded — classify it in NOT_SENT"
             );
         }
     }
 
     #[test]
+    fn locations_and_forwarded_proto_changes_are_updates() {
+        // The two gaps the Python whitelist had: real configuration it ignored.
+        let source = sample();
+
+        let mut target = sample();
+        target.rest.insert(
+            "locations".into(),
+            json!([{"path": "/api", "forward_host": "192.0.2.9", "forward_port": 9000}]),
+        );
+        assert!(should_update(&source, &target));
+
+        let mut target = sample();
+        target
+            .rest
+            .insert("trust_forwarded_proto".into(), json!(true));
+        assert!(should_update(&source, &target));
+
+        let mut target = sample();
+        target.rest.insert("hsts_enabled".into(), json!(true));
+        assert!(should_update(&source, &target));
+    }
+
+    #[test]
+    fn per_instance_differences_are_reported() {
+        let source = sample();
+        let mut target = sample();
+        target.rest.insert("certificate_id".into(), json!(4));
+        target.rest.insert("access_list_id".into(), json!(2));
+        target
+            .rest
+            .insert("meta".into(), json!({"nginx_online": false}));
+
+        assert_eq!(
+            not_synchronised_differences(&source, &target),
+            vec!["certificate_id", "access_list_id"]
+        );
+        // An identical pair reports nothing.
+        assert!(not_synchronised_differences(&source, &sample()).is_empty());
+    }
+
+    #[test]
     fn absent_and_null_are_different() {
-        let source = host(json!({"domain_names": ["a.com"]}));
-        let target = host(json!({"domain_names": ["a.com"], "ssl_forced": null}));
+        let source = sample();
+        let mut target = sample();
+        target.rest.insert("ssl_forced".into(), Value::Null);
         assert!(should_update(&source, &target));
     }
 

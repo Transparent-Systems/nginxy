@@ -9,6 +9,5 @@ logging:
   max_bytes: 10485760
   max_backup_count: 3
   # log_level: DEBUG | INFO | WARNING | ERROR | CRITICAL
-  # NOTE: --log-level defaults to INFO and overrides this value; pass
-  # `-l NONE` to make the level below take effect (unchanged behaviour).
+  # This level applies unless --log-level is given on the command line.
   log_level: INFO

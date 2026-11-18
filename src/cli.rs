@@ -1,8 +1,9 @@
 //! Command line interface: argument parsing, exit codes and signal setup.
 //!
-//! The flags, defaults and exit codes are the Python app's; only the help text
-//! is rewritten, because `--log-level NONE` means "keep the level from
-//! log.yaml" (it does *not* silence logging) and that was never documented.
+//! The flags, defaults and exit codes are the Python app's, with one deliberate
+//! difference: `--log-level` has no default, so `log_level` in `log.yaml`
+//! applies unless the flag is given. The Python app's `NONE` spelling for "use
+//! log.yaml" was dropped — with the flag optional it had nothing left to mean.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -23,7 +24,9 @@ use crate::version;
 pub const EXIT_CONFIG: u8 = 2;
 
 fn log_level_values() -> PossibleValuesParser {
-    PossibleValuesParser::new(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL", "NONE"])
+    // The five names Python's `logging` module knows. There is deliberately no
+    // `NONE`: "no override" is what omitting `--log-level` does.
+    PossibleValuesParser::new(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
 }
 
 #[derive(Debug, Parser)]
@@ -48,12 +51,11 @@ pub struct Args {
     #[arg(
         short = 'l',
         long,
-        default_value = "INFO",
         value_name = "LEVEL",
         value_parser = log_level_values(),
-        help = "Logging level; NONE keeps the level from log.yaml (default: INFO)"
+        help = "Logging level; without it the level from log.yaml applies"
     )]
-    pub log_level: String,
+    pub log_level: Option<String>,
 
     #[arg(
         long = "dry-run",
@@ -116,13 +118,7 @@ where
 fn execute(args: &Args, dir: &Path, used_fallback: bool) -> Result<u8, SettingsError> {
     let settings = Settings::load(dir)?;
 
-    let level = if args.log_level == "NONE" {
-        // Deliberate: `NONE` means "do not override log.yaml" in the Python app
-        // (PLAN.md §2.5.3), so it must not silence logging here either.
-        settings.log_level
-    } else {
-        settings::parse_level(&args.log_level).unwrap_or(LevelFilter::Info)
-    };
+    let level = resolve_level(args.log_level.as_deref(), settings.log_level);
 
     if let Err(err) = logging::init(
         level,
@@ -200,5 +196,54 @@ fn report(error: &SettingsError) {
             eprintln!("or name another folder with --config-dir <PATH>.");
         }
         other => eprintln!("ERROR: {other}"),
+    }
+}
+
+/// Resolves the logging level: an explicit `--log-level` wins, otherwise the
+/// `log_level` from `log.yaml` applies.
+///
+/// This is the one place the precedence lives, so the tests here and the
+/// process-level tests in `tests/cli.rs` pin down the same rule: give the flag
+/// and it overrides; leave it out and the file decides.
+fn resolve_level(argument: Option<&str>, from_config: LevelFilter) -> LevelFilter {
+    match argument {
+        None => from_config,
+        // Unreachable via clap, which validates the value first; falling back to
+        // the configured level rather than a hard-coded one keeps behaviour sane
+        // if this is ever called from somewhere else.
+        Some(level) => settings::parse_level(level).unwrap_or(from_config),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn without_the_option_the_configured_level_applies() {
+        assert_eq!(resolve_level(None, LevelFilter::Debug), LevelFilter::Debug);
+        assert_eq!(resolve_level(None, LevelFilter::Warn), LevelFilter::Warn);
+    }
+
+    #[test]
+    fn an_explicit_level_wins_over_the_file() {
+        assert_eq!(
+            resolve_level(Some("ERROR"), LevelFilter::Debug),
+            LevelFilter::Error
+        );
+        assert_eq!(
+            resolve_level(Some("DEBUG"), LevelFilter::Info),
+            LevelFilter::Debug
+        );
+    }
+
+    #[test]
+    fn none_is_not_a_level() {
+        // `NONE` was the Python spelling for "do not override"; with the flag
+        // optional it is gone, so a caller passing it falls back to the file.
+        assert_eq!(
+            resolve_level(Some("NONE"), LevelFilter::Error),
+            LevelFilter::Error
+        );
     }
 }

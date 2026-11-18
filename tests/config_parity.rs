@@ -185,10 +185,8 @@ fn empty_auth_payload_falls_back_to_the_environment() {
 
 #[test]
 fn env_file_supplies_the_credentials() {
-    if std::env::var_os("NPM_SOURCE_IDENTITY").is_some()
-        || std::env::var_os("NPM_IDENTITY").is_some()
-    {
-        // A developer machine that exports NPM_IDENTITY wins over .env, by
+    if std::env::var_os("NPM_SOURCE_IDENTITY").is_some() {
+        // A developer machine that exports the variable wins over .env, by
         // design; this test is only meaningful when the environment is clean.
         return;
     }
@@ -243,6 +241,9 @@ fn level_names_are_parsed_like_python() {
         Some(log::LevelFilter::Error)
     );
     assert_eq!(settings::parse_level("loud"), None);
+    // The Python app's "do not override" spelling is not a level.
+    assert_eq!(settings::parse_level("NONE"), None);
+    assert_eq!(settings::parse_level("OFF"), None);
 }
 
 #[test]
@@ -343,27 +344,8 @@ fn placeholders_inside_comments_are_ignored() {
 }
 
 #[test]
-fn new_env_names_win_over_the_legacy_ones() {
-    let dir = tempfile::tempdir().expect("temp dir");
-    write(dir.path(), "config.yaml", PYTHON_CONFIG);
-    write(
-        dir.path(),
-        ".env",
-        "NPM_SOURCE_IDENTITY=new@example.com\nNPM_SOURCE_SECRET=newsecret\n\
-         NPM_IDENTITY=old@example.com\nNPM_SECRET=oldsecret\n",
-    );
-
-    let settings = Settings::load(dir.path()).expect("settings load");
-    assert_eq!(settings.env.identity.as_deref(), Some("new@example.com"));
-    assert_eq!(settings.env.secret.as_deref(), Some("newsecret"));
-}
-
-#[test]
-fn legacy_env_names_still_work() {
-    if std::env::var_os("NPM_SOURCE_IDENTITY").is_some()
-        || std::env::var_os("NPM_IDENTITY").is_some()
-    {
-        // A developer machine that exports either name wins over .env.
+fn credentials_come_only_from_the_source_names() {
+    if std::env::var_os("NPM_SOURCE_IDENTITY").is_some() {
         return;
     }
 
@@ -372,11 +354,11 @@ fn legacy_env_names_still_work() {
     write(
         dir.path(),
         ".env",
-        "NPM_IDENTITY=legacy@example.com\nNPM_SECRET=legacysecret\n",
+        "NPM_SOURCE_IDENTITY=source@example.com\nNPM_SOURCE_SECRET=sourcesecret\n",
     );
 
     let settings = Settings::load(dir.path()).expect("settings load");
-    assert_eq!(settings.env.identity.as_deref(), Some("legacy@example.com"));
-    assert_eq!(settings.env.secret.as_deref(), Some("legacysecret"));
+    assert_eq!(settings.env.identity.as_deref(), Some("source@example.com"));
+    assert_eq!(settings.env.secret.as_deref(), Some("sourcesecret"));
     assert!(settings.missing_credentials_with(&settings.env).is_empty());
 }

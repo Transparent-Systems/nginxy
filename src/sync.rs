@@ -364,6 +364,16 @@ impl<'a> Engine<'a> {
 
             match target_by_key.get(key) {
                 Some(target_host) => {
+                    // Per-instance fields are never copied, but a difference is
+                    // worth a line: someone added a certificate or an access
+                    // list on the source and the target does not have it.
+                    for field in host::not_synchronised_differences(source_host, target_host) {
+                        log::info!(
+                            "Host {:?}: {field} differs on the target and is not synchronised (per-instance value).",
+                            source_host.domain_names
+                        );
+                    }
+
                     if host::should_update(source_host, target_host) {
                         if self.dry_run {
                             log::info!(

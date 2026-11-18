@@ -4,6 +4,7 @@
 
 # User configuration and secrets (see config.example.yaml / log.example.yaml)
 .env
+.docs
 /logs/
 
 # IDE — ignore the folder but keep the shared run/debug configuration

@@ -26,15 +26,23 @@ fn source_host(port: u16) -> serde_json::Value {
         "advanced_config": "",
         "ssl_forced": true,
         "http2_support": false,
+        "hsts_enabled": false,
+        "hsts_subdomains": false,
+        "trust_forwarded_proto": false,
         "block_exploits": true,
         "caching_enabled": false,
         "allow_websocket_upgrade": true,
         "enabled": true,
-        "meta": {"letsencrypt_agree": true}
+        "access_list_id": 0,
+        "certificate_id": 0,
+        "locations": [],
+        "meta": {"nginx_online": true, "nginx_err": null}
     })
 }
 
-/// A target host with the same domain set but its own id and timestamps.
+/// A target host with the same domain set but its own id, timestamps,
+/// certificate id and nginx status — exactly what a second NPM instance returns
+/// for the same configuration.
 fn target_host(port: u16) -> serde_json::Value {
     let mut host = source_host(port);
     let object = host.as_object_mut().expect("object");
@@ -42,6 +50,11 @@ fn target_host(port: u16) -> serde_json::Value {
     object.insert(
         "modified_on".into(),
         serde_json::json!("2026-02-02T00:00:00.000Z"),
+    );
+    object.insert("certificate_id".into(), serde_json::json!(12));
+    object.insert(
+        "meta".into(),
+        serde_json::json!({"nginx_online": false, "nginx_err": "down"}),
     );
     host
 }
@@ -117,7 +130,12 @@ fn creates_hosts_missing_on_the_target() {
         .match_body(Matcher::PartialJson(serde_json::json!({
             "domain_names": ["app.example.com", "www.example.com"],
             "forward_host": "192.0.2.5",
-            "forward_port": 8080
+            "forward_port": 8080,
+            // Ordinary configuration, propagated even though the Python
+            // whitelist ignored it.
+            "locations": [],
+            "trust_forwarded_proto": false,
+            "hsts_enabled": false
         })))
         .with_status(201)
         .with_header("content-type", "application/json")
@@ -164,6 +182,9 @@ fn updates_hosts_whose_relevant_fields_changed() {
     update.assert();
 }
 
+/// The 1.2 regression test: the target here differs in `id`, `modified_on`,
+/// `certificate_id` and `meta` — everything a second NPM instance returns
+/// differently — yet nothing is written.
 #[test]
 fn leaves_unchanged_hosts_alone() {
     let mut source = mockito::Server::new();
@@ -226,6 +247,51 @@ fn deletes_hosts_the_source_no_longer_has() {
 
     delete.assert();
     create.assert();
+}
+
+/// Custom locations are ordinary configuration: a difference must produce a PUT
+/// that carries them. The Python whitelist ignored this field entirely.
+#[test]
+fn custom_locations_are_propagated() {
+    let mut source = mockito::Server::new();
+    let mut target = mockito::Server::new();
+    let _source_token = token_mock(&mut source);
+    let _target_token = token_mock(&mut target);
+
+    let location = serde_json::json!({
+        "path": "/api",
+        "forward_scheme": "http",
+        "forward_host": "192.0.2.9",
+        "forward_port": 9000,
+        "advanced_config": ""
+    });
+
+    let mut source_value = source_host(8080);
+    source_value["locations"] = serde_json::json!([location.clone()]);
+    let _source_list = list_mock(&mut source, &serde_json::json!([source_value]));
+
+    let mut target_value = target_host(8080);
+    target_value["locations"] = serde_json::json!([]);
+    let _target_list = list_mock(&mut target, &serde_json::json!([target_value]));
+
+    let update = target
+        .mock("PUT", "/api/nginx/proxy-hosts/7")
+        .match_body(Matcher::PartialJson(
+            serde_json::json!({ "locations": [location] }),
+        ))
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(target_host(8080).to_string())
+        .expect(1)
+        .create();
+
+    let fixture = fixture(
+        &format!("{}/api", source.url()),
+        &format!("{}/api", target.url()),
+    );
+    assert_eq!(run_once(&fixture.settings, false), 0);
+
+    update.assert();
 }
 
 #[test]

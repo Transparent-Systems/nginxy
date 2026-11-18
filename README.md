@@ -5,10 +5,33 @@ it keeps the proxy host configuration of one source Nginx Proxy Manager (NPM)
 instance in step with one or more target instances.
 
 `nginxy` reads the **same** `config.yaml`, `log.yaml` and `.env`, from the same
-folder, and writes the same log file — a folder prepared for `nginx-sync` works
-without edits. The difference is the binary: one native executable, no Python,
-no interpreter, no bundled C runtime. The Linux build is statically linked, so
-no `GLIBC_2.xx` surprises.
+folder, and writes the same log file. The difference is the binary: one native
+executable, no Python, no interpreter, no bundled C runtime. The Linux build is
+statically linked, so no `GLIBC_2.xx` surprises.
+
+## Coming from nginx-sync
+
+The configuration folder carries over; only the two credential keys in `.env`
+were renamed:
+
+```bash
+sed -i 's/^NPM_IDENTITY=/NPM_SOURCE_IDENTITY=/; s/^NPM_SECRET=/NPM_SOURCE_SECRET=/' .env
+```
+
+`config.yaml` and `log.yaml` are read unchanged (including a BOM), and every
+command-line flag is identical: `-p`, `-l`, `--dry-run`, `--config-dir`,
+`--version`. What you may notice:
+
+- Domain lists in log lines render as `["a.com", "b.com"]` instead of `['a.com', 'b.com']`.
+- `--version` falls back to the binary's own version when the folder has no `log.yaml`.
+- Running from a checkout (`cargo run`) uses the current directory when the
+  binary's own folder has no `config.yaml`, and logs a warning saying so.
+
+For a side-by-side check, run both tools with `--dry-run -p 0` on the same
+folder and diff the two log files, ignoring the timestamps. Since the Python
+tool only reads `NPM_IDENTITY`/`NPM_SECRET`, keep **both** spellings in `.env`
+during that comparison — each tool reads the pair it knows and ignores the
+other; delete the old pair once `nginx-sync` is retired.
 
 ## Quick start
 
@@ -53,15 +76,14 @@ Command line arguments override properties in `config.yaml`.
 | Argument | Description |
 | -------- | ----------- |
 | `-p`, `--period <SECONDS>` | Seconds between syncs (default 30; `0` syncs once and exits) |
-| `-l`, `--log-level <LEVEL>` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` or `NONE` |
+| `-l`, `--log-level <LEVEL>` | `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL`; overrides `log_level` from `log.yaml` |
 | `--dry-run` | Report what would change; the target servers are left untouched |
 | `--config-dir <PATH>` | Folder holding `config.yaml`, `log.yaml` and `.env` (default: the folder of the binary) |
 | `--version` | Print the version recorded in `log.yaml` and exit |
 
-`-l NONE` does **not** silence logging: it means "keep the level from
-`log.yaml`". Because `--log-level` defaults to `INFO`, the `log_level` in
-`log.yaml` only takes effect when you pass `-l NONE`. This is unchanged
-behaviour, kept so that an existing deployment logs exactly as before.
+Without `-l`, the `log_level` from `log.yaml` applies. There is no `NONE`
+value: the Python app needed one because its flag carried an `INFO` default,
+which `nginxy` does not.
 
 ## Configuration
 
@@ -149,8 +171,9 @@ Rules worth knowing:
 - Only **values** are expanded, never comments: a documentation block may show
   `${VAR}` without asking for a value.
 - `NPM_SOURCE_IDENTITY`/`NPM_SOURCE_SECRET` still work without any placeholder, so
-  a folder needs no placeholders at all. The older `NPM_IDENTITY`/`NPM_SECRET`
-  are read as a fallback, so an existing `nginx-sync` `.env` keeps working.
+  a folder needs no placeholders at all. These are the only credential variable
+  names: a `.env` copied from `nginx-sync` needs its two keys renamed (see
+  RELEASE-NOTES).
   This is an addition on top of the Python behaviour, not a replacement.
 
 ## What a sync does
@@ -161,13 +184,34 @@ not been synchronised yet):
 1. Read the target's proxy hosts.
 2. Delete the hosts whose set of domain names no longer exists on the source, so
    their names are free for step 3.
-3. Create the hosts that are missing, and update the ones whose
-   `forward_host`, `forward_port`, `forward_scheme`, `advanced_config`,
-   `ssl_forced`, `http2_support`, `block_exploits`, `caching_enabled`,
-   `allow_websocket_upgrade` or `enabled` differ.
+3. Create the hosts that are missing, and update the ones whose **payload**
+   differs.
+
+A payload is every field NPM returns, minus the ones that cannot be copied to
+another instance:
+
+| Never sent | Why |
+| --- | --- |
+| `id`, `owner_user_id`, `created_on`, `modified_on`, `user` | read-only |
+| `certificate_id`, `access_list_id` | identifiers inside *one* NPM database — the same number means a different certificate or access list on another instance |
+| `meta` | runtime status (`nginx_online`, `nginx_err`), not configuration |
+
+Everything else is configuration and is propagated, including `locations`
+(custom paths) and `trust_forwarded_proto`. That is a **deny-list, not a list of
+known fields**: a field added by a future NPM version is compared and forwarded
+automatically, and the test suite fails if a field is ever neither propagated
+nor deliberately excluded.
+
+Two consequences worth knowing:
+
+- `modified_on` is not part of the payload, so touching a host on the source —
+  renaming it, saving it unchanged — no longer re-syncs every target.
+- When a `certificate_id` or `access_list_id` differs between source and target,
+  the log says so instead of silently ignoring it; those values are per-instance
+  and are never copied.
 
 Hosts are matched by their *sorted* `domain_names`, so the order of domains does
-not matter. Fields the app does not know about are forwarded untouched.
+not matter.
 
 ## Running from source
 

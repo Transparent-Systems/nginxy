@@ -24,11 +24,6 @@ use crate::template;
 pub const ENV_IDENTITY: &str = "NPM_SOURCE_IDENTITY";
 pub const ENV_SECRET: &str = "NPM_SOURCE_SECRET";
 
-/// The names `nginx-sync` used. Still read as a fallback, so an existing `.env`
-/// keeps working after the rename; the `ENV_*` names above win when both exist.
-pub const LEGACY_ENV_IDENTITY: &str = "NPM_IDENTITY";
-pub const LEGACY_ENV_SECRET: &str = "NPM_SECRET";
-
 /// File names. Identical to the Python app's, so an existing folder works.
 pub const CONFIG_FILE: &str = "config.yaml";
 pub const LOG_CONFIG_FILE: &str = "log.yaml";
@@ -155,7 +150,7 @@ impl Auth {
     }
 }
 
-/// The `NPM_IDENTITY`/`NPM_SECRET` pair, as seen by one [`Settings`] load.
+/// The `NPM_SOURCE_IDENTITY`/`NPM_SOURCE_SECRET` pair, as seen by one load.
 ///
 /// Kept as a value instead of reading `std::env` on demand so that a `.env`
 /// file is parsed without mutating the process environment (python-dotenv does
@@ -273,7 +268,7 @@ pub struct Settings {
     pub logging: LoggingConfig,
     /// Absolute path of the log file (`<dir>/<folder>/<file_name>`).
     pub log_path: PathBuf,
-    /// Level from `log.yaml`, used when `--log-level NONE` is given.
+    /// Level from `log.yaml`, used unless `--log-level` is given.
     pub log_level: LevelFilter,
     /// Credentials captured at load time; see [`EnvCredentials`].
     pub env: EnvCredentials,
@@ -389,8 +384,11 @@ pub fn read_text(path: &Path) -> io::Result<String> {
 
 /// `logging:` level names to a `log` filter.
 ///
-/// `CRITICAL` maps to `Error`: the `log` crate has no level above error, so a
-/// CRITICAL setting keeps error lines visible instead of hiding them.
+/// The five names Python's `logging` module uses. `CRITICAL` maps to `Error`:
+/// the `log` crate has no level above error, so a CRITICAL setting keeps error
+/// lines visible instead of hiding them. An unknown name (including the old
+/// `NONE`) is reported as unrecognised, and the caller then keeps whatever
+/// level it already had.
 pub fn parse_level(text: &str) -> Option<LevelFilter> {
     match text.trim().to_ascii_uppercase().as_str() {
         "TRACE" => Some(LevelFilter::Trace),
@@ -398,7 +396,6 @@ pub fn parse_level(text: &str) -> Option<LevelFilter> {
         "INFO" => Some(LevelFilter::Info),
         "WARNING" | "WARN" => Some(LevelFilter::Warn),
         "ERROR" | "CRITICAL" => Some(LevelFilter::Error),
-        "OFF" | "NONE" => Some(LevelFilter::Off),
         _ => None,
     }
 }
@@ -470,7 +467,7 @@ fn resolve_log_path(dir: &Path, logging: &LoggingConfig) -> PathBuf {
 
 /// `dotenv.load_dotenv(<dir>/.env)` — without exporting into the process.
 ///
-/// The returned map is used twice: for `NPM_IDENTITY`/`NPM_SECRET` and for
+/// The returned map is used twice: for `NPM_SOURCE_IDENTITY`/`NPM_SOURCE_SECRET` and for
 /// `${VAR}` placeholders in the YAML files, so both always see the same values.
 /// The real environment wins over `.env`, as python-dotenv does by default.
 fn load_env_map(dir: &Path) -> HashMap<String, String> {
@@ -486,19 +483,15 @@ fn load_env_map(dir: &Path) -> HashMap<String, String> {
 }
 
 fn credentials_from(vars: &HashMap<String, String>) -> EnvCredentials {
-    // First name that has a non-empty value wins, so the new names take
-    // precedence over the legacy ones without any extra configuration.
-    let value = |names: [&str; 2]| {
-        names.iter().find_map(|name| {
-            vars.get(*name)
-                .map(|value| value.trim().to_string())
-                .filter(|value| !value.is_empty())
-        })
+    let value = |name: &str| {
+        vars.get(name)
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
     };
 
     EnvCredentials {
-        identity: value([ENV_IDENTITY, LEGACY_ENV_IDENTITY]),
-        secret: value([ENV_SECRET, LEGACY_ENV_SECRET]),
+        identity: value(ENV_IDENTITY),
+        secret: value(ENV_SECRET),
     }
 }
 

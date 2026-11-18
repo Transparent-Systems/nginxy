@@ -102,8 +102,6 @@ fn missing_credentials_exit_with_two() {
         .arg(dir.path())
         .env_remove("NPM_SOURCE_IDENTITY")
         .env_remove("NPM_SOURCE_SECRET")
-        .env_remove("NPM_IDENTITY")
-        .env_remove("NPM_SECRET")
         .assert()
         .code(2)
         .stderr(predicate::str::contains(
@@ -260,4 +258,73 @@ fn explicit_config_dir_is_not_affected_by_the_current_directory() {
             .exists(),
         "the current directory must not be used"
     );
+}
+
+/// `log_level` in `log.yaml` must be honoured without any command-line flag:
+/// that is the quirk fix (PLAN.md §2.5.3). `log_level: ERROR` hides the INFO
+/// lines but keeps the ERROR ones.
+#[test]
+fn log_level_from_log_yaml_applies_without_the_option() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    dead_end_config(dir.path());
+    write(
+        dir.path(),
+        "log.yaml",
+        "version: 9.9.9\nlogging:\n  file_name: nginx_sync.log\n  folder: logs\n  log_level: ERROR\n",
+    );
+
+    nginxy()
+        .args(["-p", "0", "--config-dir"])
+        .arg(dir.path())
+        .assert()
+        .success();
+
+    let log = fs::read_to_string(dir.path().join("logs").join("nginx_sync.log")).expect("log");
+    assert!(
+        !log.contains("Starting Sync"),
+        "an INFO line must be filtered out at ERROR level: {log}"
+    );
+    assert!(
+        log.contains(" - ERROR - "),
+        "errors are still logged: {log}"
+    );
+}
+
+/// An explicit `--log-level` overrides the file.
+#[test]
+fn log_level_option_overrides_log_yaml() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    dead_end_config(dir.path());
+    write(
+        dir.path(),
+        "log.yaml",
+        "version: 9.9.9\nlogging:\n  file_name: nginx_sync.log\n  folder: logs\n  log_level: ERROR\n",
+    );
+
+    nginxy()
+        .args(["-l", "INFO", "-p", "0", "--config-dir"])
+        .arg(dir.path())
+        .assert()
+        .success();
+
+    let log = fs::read_to_string(dir.path().join("logs").join("nginx_sync.log")).expect("log");
+    assert!(
+        log.contains("Starting Sync"),
+        "INFO must win over log.yaml here: {log}"
+    );
+}
+
+/// `NONE` is gone: it is not a log level, and "use log.yaml" is now what
+/// omitting `-l` does. The CLI rejects it like any other unknown value.
+#[test]
+fn none_is_rejected_as_a_level() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    dead_end_config(dir.path());
+
+    nginxy()
+        .args(["-l", "NONE", "-p", "0", "--config-dir"])
+        .arg(dir.path())
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("invalid value"));
 }
