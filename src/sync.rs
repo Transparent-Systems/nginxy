@@ -26,6 +26,10 @@ enum SyncError {
     Request(String),
     /// Anything else (`except Exception`): reported, target retried.
     Other(String),
+    /// The target was reachable, but individual create/update/delete calls
+    /// failed. The target must stay in the retry list, otherwise a write that
+    /// failed is only noticed by reading the log.
+    Partial(Vec<String>),
 }
 
 pub struct Engine<'a> {
@@ -87,6 +91,16 @@ impl<'a> Engine<'a> {
     pub fn with_auth_refresh(mut self, interval: Duration) -> Self {
         self.auth_refresh = interval;
         self
+    }
+
+    /// Targets that still need a sync, by URL.
+    ///
+    /// A target leaves this set only after a pass in which every write
+    /// succeeded, so a failed create/update/delete keeps it here and the next
+    /// cycle retries it. Exposed so tests can assert that without waiting for a
+    /// second cycle, and so a status display could use it later.
+    pub fn pending_targets(&self) -> Vec<&str> {
+        self.unsynced.iter().map(String::as_str).collect()
     }
 
     /// Runs until `period <= 0` (one cycle) or a stop is requested.
@@ -302,6 +316,17 @@ impl<'a> Engine<'a> {
                 log::error!("An error occurred during sync: {message}");
                 false
             }
+            Err(SyncError::Partial(failures)) => {
+                // Returning false is the whole point: sync_targets() keeps the
+                // target in `unsynced`, so the next cycle tries again instead of
+                // waiting for the next source change.
+                log::error!(
+                    "{} operation(s) failed on target {target_url}; it stays in the retry list: {}",
+                    failures.len(),
+                    failures.join(", ")
+                );
+                false
+            }
         }
     }
     /// `sync_to_target()`'s body: read the target, delete what the source no
@@ -311,6 +336,10 @@ impl<'a> Engine<'a> {
         source_hosts: &[ProxyHost],
         target_url: &str,
     ) -> Result<(), SyncError> {
+        // Writes that failed. An empty list at the end means the target really
+        // is in step; anything in it keeps the target in the retry list.
+        let mut failures: Vec<String> = Vec::new();
+
         let target_hosts = {
             let session = self.session_mut(target_url)?;
             npm::list_proxy_hosts(session).map_err(|err| match err {
@@ -357,11 +386,14 @@ impl<'a> Engine<'a> {
                     "Host with domains {:?} has no id on {target_url}; cannot delete it.",
                     target_host.domain_names
                 );
+                failures.push(format!("delete {:?} (no id)", target_host.domain_names));
                 continue;
             };
 
             let session = self.session_mut(target_url)?;
-            npm::delete_proxy_host(session, id, Some(target_host));
+            if !npm::delete_proxy_host(session, id, Some(target_host)) {
+                failures.push(format!("delete {:?}", target_host.domain_names));
+            }
         }
 
         // Phase 2: create or update.
@@ -394,6 +426,7 @@ impl<'a> Engine<'a> {
                                 "Host with domains {:?} has no id on {target_url}; cannot update it.",
                                 source_host.domain_names
                             );
+                            failures.push(format!("update {:?} (no id)", source_host.domain_names));
                             continue;
                         };
 
@@ -402,7 +435,9 @@ impl<'a> Engine<'a> {
                             source_host.domain_names
                         );
                         let session = self.session_mut(target_url)?;
-                        npm::update_proxy_host(session, id, source_host);
+                        if npm::update_proxy_host(session, id, source_host).is_none() {
+                            failures.push(format!("update {:?}", source_host.domain_names));
+                        }
                     } else {
                         log::info!(
                             "Host {:?} is already up to date on target.",
@@ -424,12 +459,18 @@ impl<'a> Engine<'a> {
                         source_host.domain_names
                     );
                     let session = self.session_mut(target_url)?;
-                    npm::add_proxy_host(session, source_host);
+                    if npm::add_proxy_host(session, source_host).is_none() {
+                        failures.push(format!("create {:?}", source_host.domain_names));
+                    }
                 }
             }
         }
 
-        Ok(())
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(SyncError::Partial(failures))
+        }
     }
 
     fn session_mut(&mut self, url: &str) -> Result<&mut Session, SyncError> {

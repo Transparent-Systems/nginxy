@@ -56,9 +56,9 @@ same folder as `nginx-sync` and performs the same synchronisation.
   rejected like any other unknown level (exit code 2). Previously a
   `log_level: DEBUG` was ignored unless you knew to pass `-l NONE`.
 
-Known behaviour inherited from `nginx-sync` v1.1.0 on purpose, still to be
-assessed:
-
-- A target is treated as synchronised once the sync pass finishes, even if one
-  of its create/update/delete calls failed; it is retried at the next source
-  change.
+- A target whose create, update or delete call failed is no longer counted as
+  synchronised. The pass reports the failed operations, the target stays in the
+  retry list, and the next cycle tries again (log: `1 operation(s) failed on
+  target …; it stays in the retry list`). Previously such a target was only
+  retried after the next change on the source, so a failed write could stay
+  unnoticed until someone read the log.

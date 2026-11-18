@@ -213,6 +213,10 @@ Two consequences worth knowing:
 Hosts are matched by their *sorted* `domain_names`, so the order of domains does
 not matter.
 
+If a create, update or delete fails on a target, the pass reports the failed
+operations and the target stays queued: the next cycle retries it, without
+waiting for the source to change.
+
 ## Running from source
 
 `nginxy` looks for `config.yaml` in the folder of the **executable**, so a plain

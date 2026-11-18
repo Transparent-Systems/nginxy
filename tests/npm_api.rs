@@ -115,6 +115,19 @@ fn run_once(settings: &Settings, dry_run: bool) -> u8 {
     engine.run()
 }
 
+/// One cycle, plus the retry list it left behind — the observable that task 1.3
+/// is about.
+fn run_and_pending(settings: &Settings, dry_run: bool) -> (u8, Vec<String>) {
+    let mut engine = Engine::new(settings, 0, dry_run, Stop::new()).expect("engine");
+    let code = engine.run();
+    let pending = engine
+        .pending_targets()
+        .into_iter()
+        .map(str::to_string)
+        .collect();
+    (code, pending)
+}
+
 #[test]
 fn creates_hosts_missing_on_the_target() {
     let mut source = mockito::Server::new();
@@ -367,4 +380,123 @@ fn failed_login_skips_the_cycle() {
 
     login.assert();
     target_tokens.assert();
+}
+
+/// Task 1.3: a failed create must keep the target in the retry list, so the next
+/// cycle tries again instead of waiting for the next source change.
+#[test]
+fn failed_create_keeps_the_target_pending() {
+    let mut source = mockito::Server::new();
+    let mut target = mockito::Server::new();
+    let _source_token = token_mock(&mut source);
+    let _target_token = token_mock(&mut target);
+    let _source_list = list_mock(&mut source, &serde_json::json!([source_host(8080)]));
+    let _target_list = list_mock(&mut target, &serde_json::json!([]));
+
+    let create = target
+        .mock("POST", "/api/nginx/proxy-hosts")
+        .with_status(500)
+        .with_body(r#"{"error":"boom"}"#)
+        .expect(1)
+        .create();
+
+    let fixture = fixture(
+        &format!("{}/api", source.url()),
+        &format!("{}/api", target.url()),
+    );
+    let (code, pending) = run_and_pending(&fixture.settings, false);
+
+    create.assert();
+    assert_eq!(code, 0, "a failed write is not a process failure");
+    assert_eq!(
+        pending,
+        vec![fixture.settings.targets[0].url.clone()],
+        "the target must stay in the retry list"
+    );
+}
+
+/// The same for a delete, mixing a successful create with a failed delete.
+#[test]
+fn failed_delete_keeps_the_target_pending() {
+    let mut source = mockito::Server::new();
+    let mut target = mockito::Server::new();
+    let _source_token = token_mock(&mut source);
+    let _target_token = token_mock(&mut target);
+    let _source_list = list_mock(&mut source, &serde_json::json!([source_host(8080)]));
+
+    let orphan = serde_json::json!([{
+        "id": 9,
+        "domain_names": ["old.example.com"],
+        "forward_host": "192.0.2.9",
+        "forward_port": 80
+    }]);
+    let _target_list = list_mock(&mut target, &orphan);
+
+    let delete = target
+        .mock("DELETE", "/api/nginx/proxy-hosts/9")
+        .with_status(500)
+        .expect(1)
+        .create();
+    let create = target
+        .mock("POST", "/api/nginx/proxy-hosts")
+        .with_status(201)
+        .with_header("content-type", "application/json")
+        .with_body(source_host(8080).to_string())
+        .expect(1)
+        .create();
+
+    let fixture = fixture(
+        &format!("{}/api", source.url()),
+        &format!("{}/api", target.url()),
+    );
+    let (_code, pending) = run_and_pending(&fixture.settings, false);
+
+    delete.assert();
+    create.assert();
+    assert_eq!(pending, vec![fixture.settings.targets[0].url.clone()]);
+}
+
+/// A target host without an `id` cannot be updated; that is a failure too.
+#[test]
+fn host_without_id_keeps_the_target_pending() {
+    let mut source = mockito::Server::new();
+    let mut target = mockito::Server::new();
+    let _source_token = token_mock(&mut source);
+    let _target_token = token_mock(&mut target);
+    let _source_list = list_mock(&mut source, &serde_json::json!([source_host(8080)]));
+
+    let mut without_id = target_host(9999);
+    without_id.as_object_mut().expect("object").remove("id");
+    let _target_list = list_mock(&mut target, &serde_json::json!([without_id]));
+
+    let update = target.mock("PUT", Matcher::Any).expect(0).create();
+
+    let fixture = fixture(
+        &format!("{}/api", source.url()),
+        &format!("{}/api", target.url()),
+    );
+    let (_code, pending) = run_and_pending(&fixture.settings, false);
+
+    update.assert();
+    assert_eq!(pending, vec![fixture.settings.targets[0].url.clone()]);
+}
+
+/// A clean pass leaves nothing behind — the retry list must not grow forever.
+#[test]
+fn successful_pass_leaves_nothing_pending() {
+    let mut source = mockito::Server::new();
+    let mut target = mockito::Server::new();
+    let _source_token = token_mock(&mut source);
+    let _target_token = token_mock(&mut target);
+    let _source_list = list_mock(&mut source, &serde_json::json!([source_host(8080)]));
+    let _target_list = list_mock(&mut target, &serde_json::json!([target_host(8080)]));
+
+    let fixture = fixture(
+        &format!("{}/api", source.url()),
+        &format!("{}/api", target.url()),
+    );
+    let (code, pending) = run_and_pending(&fixture.settings, false);
+
+    assert_eq!(code, 0);
+    assert!(pending.is_empty(), "pending: {pending:?}");
 }
