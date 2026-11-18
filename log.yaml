@@ -1,7 +1,7 @@
 # nginxy — logging configuration and the version reported by --version.
 #
 # A missing or malformed copy is not fatal: the defaults below apply.
-version: 0.1.2
+version: 0.1.3
 logging:
   file_name: nginxy.log
   folder: logs

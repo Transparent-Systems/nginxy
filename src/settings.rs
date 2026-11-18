@@ -474,8 +474,11 @@ fn resolve_log_path(dir: &Path, logging: &LoggingConfig) -> PathBuf {
 fn load_env_map(dir: &Path) -> HashMap<String, String> {
     let mut values: HashMap<String, String> = std::env::vars().collect();
 
-    if let Ok(entries) = dotenvy::from_path_iter(dir.join(ENV_FILE)) {
-        for entry in entries.flatten() {
+    // Read through `read_text` so a `.env` saved by a Windows editor keeps
+    // working: without the BOM strip the first key starts with it and never
+    // matches, which looks exactly like a missing credential.
+    if let Ok(text) = read_text(&dir.join(ENV_FILE)) {
+        for entry in dotenvy::from_read_iter(text.as_bytes()).flatten() {
             values.entry(entry.0).or_insert(entry.1);
         }
     }
@@ -596,5 +599,26 @@ mod tests {
         let error = read_text(&path).expect_err("invalid UTF-8 must fail");
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
         assert!(error.to_string().contains("latin1.txt"), "{error}");
+    }
+
+    #[test]
+    fn env_file_with_a_bom_still_supplies_its_keys() {
+        let dir = tempfile::tempdir().expect("dir");
+        fs::write(
+            dir.path().join(ENV_FILE),
+            b"\xef\xbb\xbfNGINXY_BOM_TEST_KEY=value\nNGINXY_BOM_TEST_OTHER=second\n",
+        )
+        .unwrap();
+
+        let vars = load_env_map(dir.path());
+        assert_eq!(
+            vars.get("NGINXY_BOM_TEST_KEY").map(String::as_str),
+            Some("value"),
+            "the first key must not keep the BOM"
+        );
+        assert_eq!(
+            vars.get("NGINXY_BOM_TEST_OTHER").map(String::as_str),
+            Some("second")
+        );
     }
 }

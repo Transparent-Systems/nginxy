@@ -90,7 +90,7 @@ NPM_SOURCE_SECRET=your_secret
 `--version`:
 
 ```yaml
-version: 0.1.2
+version: 0.1.3
 logging:
   file_name: nginxy.log
   folder: logs

@@ -1,5 +1,14 @@
 # Release Notes nginxy
 
+## 0.1.3 - A `.env` saved with a BOM is read
+
+- `.env` now goes through the same UTF-8 and BOM handling as `config.yaml` and
+  `log.yaml`. A `.env` written by Notepad (UTF-8 with BOM) used to hide its first
+  key, so startup stopped with `No credentials configured for: …` even though
+  the file was right there.
+- The BOM and invalid-UTF-8 cases are unit-tested for all three files.
+- No other behaviour changes.
+
 ## 0.1.2 - The log file is nginxy.log, and the documentation is nginxy-only
 
 - The log file is now `logs/nginxy.log`, in the built-in default *and* in the

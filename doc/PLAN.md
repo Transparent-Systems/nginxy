@@ -262,12 +262,12 @@ three on every push.
 
 | Suite | Tests | What it pins down |
 | --- | --- | --- |
-| `src/**` unit tests | 53 | Payload filtering and field classification, domain keys, record formatting, rotation, placeholder grammar, version fallbacks, level parsing |
+| `src/**` unit tests | 54 | Payload filtering and field classification, domain keys, record formatting, rotation, placeholder grammar, version fallbacks, level parsing |
 | `src/bin/xtask.rs` | 3 | Section extraction, tag/version mismatch, missing section |
 | `tests/settings.rs` | 19 | A deployed configuration loads, BOM, missing config, absolute log folder, auth precedence, `.env`, placeholders, missing-credential list |
 | `tests/npm_api.rs` | 12 | Verbs, paths, bearer header, payload shape, delete-before-create, dry-run silence |
 | `tests/cli.rs` | 14 | `--version`/`--help` without config, exit 2 cases, log written into `--config-dir`, Ctrl-C exits 130 |
-| **total** | **101** | |
+| **total** | **102** | |
 
 Release builds are exercised by the same smoke test CI runs: `--version`,
 `--help`, then a real one-shot run with `--config-dir` against port 9 (which
