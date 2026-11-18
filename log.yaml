@@ -2,7 +2,7 @@
 #
 # Same file, same keys and same defaults as nginx-sync. A missing or malformed
 # copy is not fatal: the defaults below apply.
-version: 0.1.0
+version: 0.1.1
 logging:
   file_name: nginx_sync.log
   folder: logs

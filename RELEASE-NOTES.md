@@ -1,5 +1,23 @@
 # Release Notes nginxy
 
+## 0.1.1 - The Windows exe starts on a clean install
+
+The 0.1.0 Windows build linked the C runtime dynamically, so `nginxy.exe`
+imported `VCRUNTIME140.dll`. That DLL belongs to the Visual C++ Redistributable,
+not to Windows, and when it is missing the loader stops *before* `main()`: no
+window, no console output, not even `--version`, and no log file. The exe is now
+linked with the static CRT and imports only DLLs that every Windows 10/11
+installation has.
+
+- `nginxy.exe` no longer depends on the Visual C++ Redistributable — nothing has
+  to be installed for it to start.
+- The build now fails if that import ever reappears, so a release cannot ship an
+  exe that is dead on a clean machine.
+- No behaviour changes: the command line, the log format and the sync logic are
+  the same as 0.1.0.
+- Still on 0.1.0: either install "Microsoft Visual C++ 2015-2022 Redistributable
+  (x64)", or copy `VCRUNTIME140.dll` next to the old exe.
+
 ## 0.1.0 - Rust port of nginx-sync
 
 Rewritten in Rust; reads the same `config.yaml`, `log.yaml` and `.env` from the
