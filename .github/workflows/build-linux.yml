@@ -46,7 +46,9 @@ jobs:
           cp log.yaml /tmp/nginxy-conf/
           printf 'NPM_SOURCE_IDENTITY=smoke@example.com\nNPM_SOURCE_SECRET=smoke\n' > /tmp/nginxy-conf/.env
           ./dist/nginxy --config-dir /tmp/nginxy-conf -p 0
-          grep -q "Starting Sync" /tmp/nginxy-conf/logs/nginx_sync.log
+          # The file name comes from log.yaml, so match any *.log in the folder
+          # rather than hard-coding one name here.
+          grep -q "Starting Sync" /tmp/nginxy-conf/logs/*.log
       - name: Generate SHA256 checksum
         run: |
           cd dist

@@ -1,16 +1,16 @@
-//! Configuration parity with the Python application.
+//! Loading `config.yaml`, `log.yaml` and `.env` from one configuration folder.
 //!
-//! The two fixtures below are the files that ship with `nginx-sync` v1.1.0
-//! (IP addresses included): a folder copied from the Python installation must
-//! load here unchanged, including the commented-out third target and the BOM a
-//! Windows editor may have added.
+//! The fixtures below are a realistic deployment: two targets, a third one
+//! commented out, the addresses an operator would really use, and the BOM a
+//! Windows editor may add. They are the input the binary is handed on a running
+//! system, so they are worth testing verbatim rather than in a minimal form.
 
 use std::fs;
 use std::path::Path;
 
 use nginxy::settings::{self, Auth, AuthPayload, EnvCredentials, Settings, SettingsError};
 
-const PYTHON_CONFIG: &str = r#"source:
+const SAMPLE_CONFIG: &str = r#"source:
   url: "http://192.0.2.10:81/api"
 
 targets:
@@ -25,7 +25,7 @@ targets:
   #     secret: "change-me"
 "#;
 
-const PYTHON_LOG: &str = r#"version: 1.1.0
+const SAMPLE_LOG: &str = r#"version: 1.1.0
 logging:
   file_name: nginx_sync.log
   folder: logs
@@ -48,8 +48,8 @@ fn load(config: &str, log: &str) -> (tempfile::TempDir, Settings) {
 }
 
 #[test]
-fn loads_the_python_config_unchanged() {
-    let (dir, settings) = load(PYTHON_CONFIG, PYTHON_LOG);
+fn loads_a_deployed_configuration() {
+    let (dir, settings) = load(SAMPLE_CONFIG, SAMPLE_LOG);
 
     assert_eq!(settings.source.url, "http://192.0.2.10:81/api");
     assert_eq!(settings.targets.len(), 2, "the commented target stays out");
@@ -76,9 +76,9 @@ fn accepts_a_byte_order_mark() {
     write(
         dir.path(),
         "config.yaml",
-        &format!("\u{feff}{PYTHON_CONFIG}"),
+        &format!("\u{feff}{SAMPLE_CONFIG}"),
     );
-    write(dir.path(), "log.yaml", &format!("\u{feff}{PYTHON_LOG}"));
+    write(dir.path(), "log.yaml", &format!("\u{feff}{SAMPLE_LOG}"));
 
     let settings = Settings::load(dir.path()).expect("settings load with BOM");
     assert_eq!(settings.targets.len(), 2);
@@ -112,7 +112,7 @@ fn missing_source_url_is_rejected() {
 #[test]
 fn absent_log_yaml_falls_back_to_defaults() {
     let dir = tempfile::tempdir().expect("temp dir");
-    write(dir.path(), "config.yaml", PYTHON_CONFIG);
+    write(dir.path(), "config.yaml", SAMPLE_CONFIG);
     let settings = Settings::load(dir.path()).expect("settings load");
     assert_eq!(settings.logging.file_name, "nginx_sync.log");
     assert_eq!(settings.logging.max_backup_count, 3);
@@ -129,7 +129,7 @@ fn absolute_log_folder_is_used_as_given() {
     let folder = serde_json::to_string(&elsewhere.path().display().to_string())
         .expect("quote the log folder");
     let log = format!("logging:\n  folder: {folder}\n  file_name: other.log\n");
-    let (_dir, settings) = load(PYTHON_CONFIG, &log);
+    let (_dir, settings) = load(SAMPLE_CONFIG, &log);
     assert_eq!(settings.log_path, elsewhere.path().join("other.log"));
 }
 
@@ -194,7 +194,7 @@ fn env_file_supplies_the_credentials() {
     }
 
     let dir = tempfile::tempdir().expect("temp dir");
-    write(dir.path(), "config.yaml", PYTHON_CONFIG);
+    write(dir.path(), "config.yaml", SAMPLE_CONFIG);
     write(
         dir.path(),
         ".env",
@@ -209,7 +209,7 @@ fn env_file_supplies_the_credentials() {
 
 #[test]
 fn missing_credentials_lists_source_then_targets() {
-    let (_dir, settings) = load(PYTHON_CONFIG, PYTHON_LOG);
+    let (_dir, settings) = load(SAMPLE_CONFIG, SAMPLE_LOG);
     assert_eq!(
         settings.missing_credentials_with(&EnvCredentials::default()),
         vec!["source", "NAS2-Nginx", "DEV-Nginx"]
@@ -220,7 +220,7 @@ fn missing_credentials_lists_source_then_targets() {
 fn target_without_name_is_reported_by_url() {
     let (_dir, settings) = load(
         "source:\n  url: \"http://s/api\"\ntargets:\n  - url: \"http://t/api\"\n",
-        PYTHON_LOG,
+        SAMPLE_LOG,
     );
     assert_eq!(
         settings.missing_credentials_with(&EnvCredentials::default()),
@@ -229,7 +229,7 @@ fn target_without_name_is_reported_by_url() {
 }
 
 #[test]
-fn level_names_are_parsed_like_python() {
+fn level_names_are_recognised_regardless_of_case() {
     assert_eq!(
         settings::parse_level("debug"),
         Some(log::LevelFilter::Debug)
@@ -243,7 +243,8 @@ fn level_names_are_parsed_like_python() {
         Some(log::LevelFilter::Error)
     );
     assert_eq!(settings::parse_level("loud"), None);
-    // The Python app's "do not override" spelling is not a level.
+    // There is no "do not override" level: omitting --log-level is how you opt
+    // out, so an old NONE value is rejected like any other unknown name.
     assert_eq!(settings::parse_level("NONE"), None);
     assert_eq!(settings::parse_level("OFF"), None);
 }
@@ -315,7 +316,7 @@ fn unresolved_placeholder_names_the_file_and_variable() {
 #[test]
 fn log_yaml_placeholders_never_break_the_defaults() {
     let dir = tempfile::tempdir().expect("temp dir");
-    write(dir.path(), "config.yaml", PYTHON_CONFIG);
+    write(dir.path(), "config.yaml", SAMPLE_CONFIG);
     // Unresolvable placeholder in log.yaml must not be fatal, exactly like a
     // malformed log.yaml.
     write(
@@ -352,7 +353,7 @@ fn credentials_come_only_from_the_source_names() {
     }
 
     let dir = tempfile::tempdir().expect("temp dir");
-    write(dir.path(), "config.yaml", PYTHON_CONFIG);
+    write(dir.path(), "config.yaml", SAMPLE_CONFIG);
     write(
         dir.path(),
         ".env",
