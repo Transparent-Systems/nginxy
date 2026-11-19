@@ -6,6 +6,9 @@
 .env
 /logs/
 
+# Machine-local scratch: dev notes and schema-check baselines.
+.docs/
+
 # IDE - ignore the folder but keep the shared run/debug configuration
 .vscode/*
 !.vscode/launch.json
