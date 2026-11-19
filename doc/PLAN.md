@@ -423,8 +423,16 @@ sync.` with no errors. The deployed configuration has a single target
 
 Open:
 
-1. **`insecure_skip_verify`** for self-signed NPM instances (D5) - a configuration
-   key, off by default.
+1. **`insecure_skip_verify`** (D5) - **parked, not implemented.** A per-endpoint
+   boolean, default `false`. When `false` (the default), any `https://` endpoint
+   whose certificate is untrusted, or whose name does not match, fails the
+   connection; plain `http://` is unaffected. When `true`, certificate *and*
+   hostname verification are disabled for that endpoint, so nginxy connects to a
+   self-signed / private-CA / IP-addressed HTTPS server and the connection
+   succeeds whenever the server answers TLS at all - at the cost of accepting a
+   possible man-in-the-middle. Parked because the deployed endpoints are plain
+   HTTP, and a properly trusted certificate (system store or `SSL_CERT_FILE`) is
+   the preferred fix whenever HTTPS is required.
 2. **Optional `cargo xtask schema-check`**: re-run the field classification against
    a live NPM after an upgrade, so a new key is caught in one command instead of
    during the next sync.
