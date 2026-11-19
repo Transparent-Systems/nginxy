@@ -216,6 +216,20 @@ printf 'NPM_SOURCE_IDENTITY=your_identity\nNPM_SOURCE_SECRET=your_secret\n' > .e
 cargo run -- --config-dir ../nginxy --dry-run -p 0
 ```
 
+### Checking the live NPM schema after an upgrade
+
+```bash
+cargo xtask schema-check --config-dir <folder>                  # classify live fields
+cargo xtask schema-check --config-dir <folder> --save baseline.txt   # snapshot
+cargo xtask schema-check --config-dir <folder> --baseline baseline.txt # diff later
+```
+
+`schema-check` authenticates against the source NPM in `<folder>`, fetches its
+proxy hosts, and prints how every returned field is classified (excluded,
+not-sent, or propagated). After you upgrade NPM, run it with a `--baseline` saved
+before the upgrade: any newly appearing field fails the check (exit 1), so it is
+reviewed before it starts re-syncing hosts.
+
 ### In VS Code
 
 `.vscode/` carries three shared files, so everyone gets the same setup. Open the

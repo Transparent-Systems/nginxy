@@ -34,6 +34,34 @@ pub const NOT_SENT: [&str; 3] = ["certificate_id", "access_list_id", "meta"];
 /// reporting it would just echo whether nginx is up.
 pub const REPORTED_AS_NOT_SENT: [&str; 2] = ["certificate_id", "access_list_id"];
 
+/// How a proxy-host payload field is treated by the sync.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FieldClass {
+    /// Assigned by the server; never sent back and never compared.
+    Excluded,
+    /// A per-instance identifier or runtime status; neither sent nor compared.
+    NotSent,
+    /// Ordinary configuration: compared against each target and propagated.
+    Propagated,
+}
+
+/// Classifies one proxy-host payload field.
+///
+/// The deny-list makes this total: anything not explicitly excluded or not-sent
+/// is propagated, so a field a future NPM version adds cannot be dropped
+/// silently (see `every_field_is_classified`). `cargo xtask schema-check` uses
+/// this to report every field a live NPM returns, so an upgraded NPM that gains
+/// a field is caught in one command instead of during the next sync.
+pub fn classify_field(key: &str) -> FieldClass {
+    if EXCLUDED_KEYS.contains(&key) {
+        FieldClass::Excluded
+    } else if NOT_SENT.contains(&key) {
+        FieldClass::NotSent
+    } else {
+        FieldClass::Propagated
+    }
+}
+
 /// A proxy host as NPM returns it.
 ///
 /// Only two fields are typed; everything else is kept as raw JSON in `rest`.
@@ -302,6 +330,23 @@ mod tests {
                 "{key} is neither propagated nor excluded - classify it in NOT_SENT"
             );
         }
+    }
+
+    #[test]
+    fn classify_field_places_known_and_future_keys() {
+        assert_eq!(classify_field("id"), FieldClass::Excluded);
+        assert_eq!(classify_field("owner_user_id"), FieldClass::Excluded);
+        assert_eq!(classify_field("created_on"), FieldClass::Excluded);
+        assert_eq!(classify_field("certificate_id"), FieldClass::NotSent);
+        assert_eq!(classify_field("access_list_id"), FieldClass::NotSent);
+        assert_eq!(classify_field("meta"), FieldClass::NotSent);
+        assert_eq!(classify_field("locations"), FieldClass::Propagated);
+        assert_eq!(
+            classify_field("trust_forwarded_proto"),
+            FieldClass::Propagated
+        );
+        // The deny-list is total: an unknown future field is still propagated.
+        assert_eq!(classify_field("future_npm_field"), FieldClass::Propagated);
     }
 
     #[test]

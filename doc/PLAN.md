@@ -219,7 +219,7 @@ nginxy/
 │   ├── sync.rs                # Engine: phases 0-3, retry set, dry run
 │   ├── stop.rs                # interruptible sleep
 │   ├── version.rs             # version resolution for --version
-│   └── bin/xtask.rs           # `cargo xtask release-notes`
+│   └── bin/xtask.rs           # `cargo xtask release-notes` and `schema-check`
 ├── tests/
 │   ├── settings.rs            # configuration loading end to end
 │   ├── npm_api.rs             # mock NPM: verbs, paths, payloads, ordering
@@ -262,12 +262,12 @@ three on every push.
 
 | Suite | Tests | What it pins down |
 | --- | --- | --- |
-| `src/**` unit tests | 55 | Payload filtering and field classification, domain keys, record formatting, rotation, placeholder grammar, version fallbacks, level parsing |
-| `src/bin/xtask.rs` | 3 | Section extraction, tag/version mismatch, missing section |
+| `src/**` unit tests | 56 | Payload filtering and field classification, domain keys, record formatting, rotation, placeholder grammar, version fallbacks, level parsing |
+| `src/bin/xtask.rs` | 5 | release-notes extraction/tag check; schema-check classification rendering and baseline diff |
 | `tests/settings.rs` | 19 | A deployed configuration loads, BOM, missing config, absolute log folder, auth precedence, `.env`, placeholders, missing-credential list |
 | `tests/npm_api.rs` | 12 | Verbs, paths, bearer header, payload shape, delete-before-create, dry-run silence |
 | `tests/cli.rs` | 14 | `--version`/`--help` without config, exit 2 cases, log written into `--config-dir`, Ctrl-C exits 130 |
-| **total** | **103** | |
+| **total** | **106** | |
 
 Release builds are exercised by the same smoke test CI runs: `--version`,
 `--help`, then a real one-shot run with `--config-dir` against port 9 (which
@@ -433,9 +433,12 @@ Open:
    possible man-in-the-middle. Parked because the deployed endpoints are plain
    HTTP, and a properly trusted certificate (system store or `SSL_CERT_FILE`) is
    the preferred fix whenever HTTPS is required.
-2. **Optional `cargo xtask schema-check`**: re-run the field classification against
-   a live NPM after an upgrade, so a new key is caught in one command instead of
-   during the next sync.
+Resolved on 2026-11-19: **`cargo xtask schema-check`** was added. It reads a deployed
+folder's source NPM, classifies every proxy-host payload field (via
+`host::classify_field`), and prints an excluded / not-sent / propagated
+breakdown. `--save` writes the observed field set and `--baseline` diffs against
+it, so an upgraded NPM that gains a payload field fails the check (exit 1)
+instead of silently re-syncing hosts on the next cycle.
 
 ---
 
