@@ -440,6 +440,18 @@ breakdown. `--save` writes the observed field set and `--baseline` diffs against
 it, so an upgraded NPM that gains a payload field fails the check (exit 1)
 instead of silently re-syncing hosts on the next cycle.
 
+Workflow for an NPM upgrade:
+
+- Before upgrading: `cargo xtask schema-check --config-dir <PATH> --save baseline.txt`.
+- After upgrading: `cargo xtask schema-check --config-dir <PATH> --baseline baseline.txt`.
+- A new field shows as `propagated` and the check exits 1. Decide what it is:
+  real configuration -> re-save the baseline to accept it; a per-instance id or
+  runtime status -> add it to `NOT_SENT` in `src/host.rs` (and `REPORTED_AS_NOT_SENT`
+  when operators might expect it), then re-save the baseline; a server-assigned
+  read-only field -> `EXCLUDED_KEYS`.
+- The baseline records only the fields a given NPM build actually returned; the
+  deny-lists are rules ("never send these"), so an entry such as `user` or the
+  struct's own `id`/`domain_names` need not appear in a live baseline.
 ---
 
 ## 12. Definition of done
