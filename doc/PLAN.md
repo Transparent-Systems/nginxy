@@ -414,12 +414,18 @@ attach their assets to the same release, and a re-run of a failed job is safe.
 
 ## 11. Open items
 
+**Resolved on 2026-11-19: the live cutover.** A `--dry-run -p 0` beside the
+running service reported all 11 hosts in step (zero proposed writes); the
+existing systemd unit was restarted onto nginxy 0.1.4 with the same `-p 20`
+cadence, and the new process logs `No changes in source and all targets are in
+sync.` with no errors. The deployed configuration has a single target
+(NAS2-Nginx), so "both production targets" in earlier drafts did not apply.
+
+Open:
+
 1. **`insecure_skip_verify`** for self-signed NPM instances (D5) - a configuration
    key, off by default.
-2. **Live validation and cutover**: run `--dry-run -p 0` against the live source and
-   both production targets, compare the reported work with what the service does
-   today, then a real cycle, then switch the service unit.
-3. **Optional `cargo xtask schema-check`**: re-run the field classification against
+2. **Optional `cargo xtask schema-check`**: re-run the field classification against
    a live NPM after an upgrade, so a new key is caught in one command instead of
    during the next sync.
 
